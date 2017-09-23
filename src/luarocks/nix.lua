@@ -1,3 +1,8 @@
+-- rockspec format available at
+-- https://github.com/luarocks/luarocks/wiki/Rockspec-format
+-- this should be converted to an addon
+-- https://github.com/luarocks/luarocks/wiki/Addon-author's-guide
+-- needs at least one json library, for instance luaPackages.cjson
 local nix = {}
 package.loaded["luarocks.nix"] = nix
 
@@ -23,6 +28,15 @@ nix.help = [[
 toto test
 ]]..util.deps_mode_help()
 
+
+function table2str(s)
+local t = { }
+for k,v in pairs(s) do
+	t[#t+1] = k.."="..tostring(v)..";"
+end
+return "{\n"..table.concat(t,"\n").." }\n"
+end
+
 local function do_build(name, version, deps_mode, build_only_deps)
 	-- only support rockspec for now
    if name:match("%.rockspec$") then
@@ -43,11 +57,80 @@ local function do_build(name, version, deps_mode, build_only_deps)
 end
 
 -- return header
-function nix.header()
-	local header = "/* "..filename.." is an auto-generated file -- DO NOT EDIT! */"
-	return header
+-- function nix.header()
+-- 	local header = "/* "..filename.." is an auto-generated file -- DO NOT EDIT! */"
+-- 	return header
+-- end
+local function generate_metadata(spec)
+
 end
 
+function nix.get_checksum(spec)
+
+	-- by default
+	local command = "/run/current-system/sw/bin/nix-prefetch-url "..spec.source.url
+	if spec.source.url:match("^git")  then
+		-- with quiet flag we get only json"--quiet"
+		command = "/home/teto/.nix-profile/bin/nix-prefetch-git --rev "..tostring(spec.source.tag).." "..spec.source.url
+		local json_ok, json = util.require_json()
+		if not json_ok then
+			util.printerr("No json available")
+			return nil, "A JSON library is required for this command. "..json
+		end
+
+		local r = io.popen(command)
+		local checksum=r:read()
+		local res = json.decode(table.concat(out))
+		util.printout("res=", res)
+		return res.sha256
+	end
+	-- local checksum="0d8f3kmzm72sqkh85156l2l1jbxr393jav831zlkik5bid38chn4"
+	-- utils.printout()
+	local r = io.popen(command)
+	local checksum=r:read()
+	return checksum
+end
+
+
+
+--TODO override the execution done in builtin.run(spec)
+-- maybe we can add nix as a specific platform
+function nix.generateBuildInstructions(spec)
+	-- chcek build folder, builtin
+	if spec.build.type == "builtins" then
+
+		--monkeypatch builtin.execute
+		-- todo save & restore it
+		commands = ""
+		builtin.execute = function (...)
+			commands = commands ..  (table.concat({...}, " ").."\n")
+		end
+		builtin.run(spec)
+		return {
+			preBuild=commands
+		}
+	end
+
+end
+--
+--
+--
+function convert_license(value)
+end
+-- function nix.convert2nix(name)
+
+-- for now accept only *.rosckspec files
+--
+--  Attemps to generate the following package
+--
+--  luabitop = buildLuaPackage rec {
+--    version = "1.0.2";
+--    name = "bitop-${version}";
+--    src = fetchurl {
+--      url = "http://bitop.luajit.org/download/LuaBitOp-${version}.tar.gz";
+--      sha256 = "16fffbrgfcw40kskh2bn9q7m3gajffwd2f35rafynlnd7llwj1qj";
+--    };
+--
 function nix.convert2nix(name)
 	-- for now we accept only rockspec_filename
    if not name:match("%.rockspec$") then
@@ -59,50 +142,59 @@ function nix.convert2nix(name)
    if not spec then
 	   return nil, err
 	end
-   print("loaded name=", spec.name)
-   local drv_name = spec.name..".nix"
-   print("Writing derivation to ", drv_name)
-   local fd = io.open(drv_name, "w+")
 
    -- deps.parse_dep(dep) is called fetch.load_local_rockspec so 
    -- so we havebuildLuaPackage defined in
    local dependencies = ""
    for id, dep in ipairs(spec.dependencies)
    do
+	   -- todo can I use a "join" func ?
 		-- deps.constraints is a table {op, version}
 		dependencies = dependencies.." "..dep.name
-	   print("name; ", id, "dep:", dep.name)
+	   -- print("name; ", id, "dep:", dep.name)
    end
 
+    -- the good thing is zat nix-prefetch-zip caches downloads in the store
+	local checksum = nix.get_checksum(spec)
+	util.printout("checksum=",checksum)
+
+	local function installStr(spec)
+		-- what if nil ?
+		-- TODO maybe we should inject our own fs.lua
+		-- and overwrite the functions called by
+		-- function repos.deploy_files(name, version, wrap_bin_scripts, deps_mode)
+		for file, path in pairs(spec.build.install)
+		do
+		end
+	end
+
+
+
 	-- todo check constraints to choose the correct version of lua
-   local attrs = {
-	name= spec.name,
-    version= spec.version,
-	-- we should run sthg to get sha
-   src= "{  url="..(spec.source.url).."; sha256=".. "0x00".."}",
-   meta= "{ homepage="..spec.description.homepage.."; }",
-   -- nativeInputs etc will depend on the type of package (binary or ...)
-   propagatedBuildInputs = "[".. dependencies .."]"
-   }
+	local attrs = {
+		name=util.LQ(spec.name),
+		version=util.LQ(spec.version),
+		-- we should run sthg to get sha
+		src= table2str({url=spec.source.url, sha256=util.LQ(checksum)}),
+		-- add license ? MAINTAINERS
+		-- add convert_license(spec.description.license) in meta
+		meta= table2str({homepage=util.LQ(spec.description.homepage)}),
+		-- nativeInputs etc will depend on the type of package (binary or ...)
+
+		-- preBuild=nix.generateBuildInstructions(spec),
+		propagatedBuildInputs = "[".. dependencies .."]",
+		installPhase = [[''
+		mkdir -p $out/lib/lua/${lua.luaversion}
+		install -p bit.so $out/lib/lua/${lua.luaversion}
+		'' ]]
+	}
+
    -- todo parse license too
    -- see https://stackoverflow.com/questions/1405583/concatenation-of-strings-in-lua for the best method to concat strings
 
-    -- TODO
-	-- dependencies
-
-    -- meta = {
-    --   homepage = "http://bitop.luajit.org";
-    --   maintainers = with maintainers; [ flosse ];
-    -- };
-    -- buildFlags = stdenv.lib.optionalString stdenv.isDarwin "macosx";
-   function table2str(s)
-    local t = { }
-    for k,v in pairs(s) do
-        t[#t+1] = k.."="..tostring(v)..";"
-    end
-    return table.concat(t,"\n")
-	end
-	local str = table2str(attrs)
+	local str = spec.name.." = buildLuaPackage rec "
+	str = str..table2str(attrs)..";"
+	-- str = str.."\n}\n"
 
 	-- spec.install => install phase
 
@@ -112,12 +204,13 @@ function nix.convert2nix(name)
     -- '';
 
 
-   ret, err = fd:write(str)
+   -- ret, err = fd:write(str)
+   local err = false
+   print(str)
+   ret = true
    if not ret then
 	   print("Error happened: "..err)
 	end
-   -- ret, err = fd:write()
-   fd:close()
 
    return true
 end
@@ -137,27 +230,13 @@ function nix.command(flags, name, version)
       return nil, "Argument missing. "..util.see_help("build")
    end
    assert(type(version) == "string" or not version)
-   print("hello world name=", name)
+   -- print("hello world name=", name)
    local res, err = nix.convert2nix(name)
    return res
 
    -- if flags["pack-binary-rock"] then
    --    return pack.pack_binary_rock(name, version, do_build, name, version, deps.get_deps_mode(flags))
    -- else
-   --    local ok, err = fs.check_command_permissions(flags)
-   --    if not ok then return nil, err, cfg.errorcodes.PERMISSIONDENIED end
-   --    ok, err = do_build(name, version, deps.get_deps_mode(flags), flags["only-deps"])
-   --    if not ok then return nil, err end
-   --    name, version = ok, err
-
-   --    if (not flags["only-deps"]) and (not flags["keep"]) and not cfg.keep_other_versions then
-   --       local ok, err = remove.remove_other_versions(name, version, flags["force"], flags["force-fast"])
-   --       if not ok then util.printerr(err) end
-   --    end
-
-   --    manif.check_dependencies(nil, deps.get_deps_mode(flags))
-   --    return name, version
-   -- end
 end
 
 
