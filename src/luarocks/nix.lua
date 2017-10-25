@@ -65,26 +65,40 @@ local function generate_metadata(spec)
 
 end
 
+local function convert2nixLicense(spec)
+	-- should parse spec.description.license instead !
+	return "licenses.mit"
+end
+
 function nix.get_checksum(spec)
 
-	-- by default
-	local command = "/run/current-system/sw/bin/nix-prefetch-url "..spec.source.url
+	local prefetch_url_program = "/run/current-system/sw/bin/nix-prefetch-url"
+	local prefetch_git_program = "/home/teto/.nix-profile/bin/nix-prefetch-git"
+
+	local command = prefetch_url_program.." "..spec.source.url
 	if spec.source.url:match("^git")  then
 		-- with quiet flag we get only json"--quiet"
-		command = "/home/teto/.nix-profile/bin/nix-prefetch-git --rev "..tostring(spec.source.tag).." "..spec.source.url
+		-- quiet to print only the json
+		command = prefetch_git_program.." --quiet --rev "..tostring(spec.source.tag).." "..spec.source.url
+		-- a nil value ?
 		local json_ok, json = util.require_json()
 		if not json_ok then
 			util.printerr("No json available")
 			return nil, "A JSON library is required for this command. "..json
 		end
 
-		local r = io.popen(command)
-		local checksum=r:read()
-		local res = json.decode(table.concat(out))
-		util.printout("res=", res)
+		-- print("running command: "..command)
+		local r = io.popen(command, 'r')
+		-- hwy did I need a * here ?
+		local out, err, retcode = r:read("*a")
+		-- print("output")
+		-- print(out)
+		-- # table.concat(out)
+		local res = json.decode(out)
+		-- print("res=", res)
+		-- util.printout("res=", res.sha256)
 		return res.sha256
 	end
-	-- local checksum="0d8f3kmzm72sqkh85156l2l1jbxr393jav831zlkik5bid38chn4"
 	-- utils.printout()
 	local r = io.popen(command)
 	local checksum=r:read()
@@ -178,7 +192,11 @@ function nix.convert2nix(name)
 		src= table2str({url=spec.source.url, sha256=util.LQ(checksum)}),
 		-- add license ? MAINTAINERS
 		-- add convert_license(spec.description.license) in meta
-		meta= table2str({homepage=util.LQ(spec.description.homepage)}),
+		meta= table2str({
+			homepage=util.LQ(spec.description.homepage),
+			description=util.LQ(spec.description.summary),
+			license=convert2nixLicense(spec)
+		}),
 		-- nativeInputs etc will depend on the type of package (binary or ...)
 
 		-- preBuild=nix.generateBuildInstructions(spec),
