@@ -67,15 +67,23 @@ end
 
 local function convert2nixLicense(spec)
 	-- should parse spec.description.license instead !
-	return "licenses.mit"
+	return "stdenv.lib.licenses.mit"
 end
 
-function nix.get_checksum(spec)
+
+-- build 'src' component of the derivation
+function get_src(spec)
+-- end
+-- function nix.get_checksum(spec)
 
 	local prefetch_url_program = "/run/current-system/sw/bin/nix-prefetch-url"
 	local prefetch_git_program = "/home/teto/.nix-profile/bin/nix-prefetch-git"
 
 	local command = prefetch_url_program.." "..spec.source.url
+	local checksum = nil
+	local fetch_method = nil
+	-- fetchgit url/rev/sha256
+	-- todo check lua-msgpack
 	if spec.source.url:match("^git")  then
 		-- with quiet flag we get only json"--quiet"
 		-- quiet to print only the json
@@ -97,12 +105,24 @@ function nix.get_checksum(spec)
 		local res = json.decode(out)
 		-- print("res=", res)
 		-- util.printout("res=", res.sha256)
-		return res.sha256
+		checksum = res.sha256
+		fetchmethod = ""
+
+		local rev = spec.source.branch or spec.source.tag
+		util.printerr(spec.package..": rev=", rev)
+ 		return " fetchfromgit "..table2str({
+			url=util.LQ(spec.source.url),
+			rev=util.LQ(rev),
+			sha256=util.LQ(checksum)
+		})
+	else
+		-- utils.printout()
+		local r = io.popen(command)
+		checksum=r:read()
+		fetchmethod = "fetchurl"
+		return " fetchurl "..table2str({url=util.LQ(spec.source.url), sha256=util.LQ(checksum)})
 	end
-	-- utils.printout()
-	local r = io.popen(command)
-	local checksum=r:read()
-	return checksum
+
 end
 
 
@@ -169,8 +189,8 @@ function nix.convert2nix(name)
    end
 
     -- the good thing is zat nix-prefetch-zip caches downloads in the store
-	local checksum = nix.get_checksum(spec)
-	util.printout("checksum=",checksum)
+	-- local checksum = nix.get_checksum(spec)
+	-- util.printerr("checksum=",checksum)
 
 	local function installStr(spec)
 		-- what if nil ?
@@ -189,7 +209,7 @@ function nix.convert2nix(name)
 		name=util.LQ(spec.name),
 		version=util.LQ(spec.version),
 		-- we should run sthg to get sha
-		src= table2str({url=spec.source.url, sha256=util.LQ(checksum)}),
+		src=get_src(spec),
 		-- add license ? MAINTAINERS
 		-- add convert_license(spec.description.license) in meta
 		meta= table2str({
@@ -201,6 +221,7 @@ function nix.convert2nix(name)
 
 		-- preBuild=nix.generateBuildInstructions(spec),
 		propagatedBuildInputs = "[".. dependencies .."]",
+		-- todo this is wrong
 		installPhase = [[''
 		mkdir -p $out/lib/lua/${lua.luaversion}
 		install -p bit.so $out/lib/lua/${lua.luaversion}
@@ -213,9 +234,7 @@ function nix.convert2nix(name)
 	local str = spec.name.." = buildLuaPackage rec "
 	str = str..table2str(attrs)..";"
 	-- str = str.."\n}\n"
-
 	-- spec.install => install phase
-
     -- installPhase = ''
     --   mkdir -p $out/lib/lua/${lua.luaversion}
     --   install -p bit.so $out/lib/lua/${lua.luaversion}
@@ -227,7 +246,7 @@ function nix.convert2nix(name)
    print(str)
    ret = true
    if not ret then
-	   print("Error happened: "..err)
+	   util.printerr("Error happened: "..err)
 	end
 
    return true
