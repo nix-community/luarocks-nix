@@ -222,10 +222,10 @@ function nix.convert2nix(name)
 		-- preBuild=nix.generateBuildInstructions(spec),
 		propagatedBuildInputs = "[".. dependencies .."]",
 		-- todo this is wrong
-		installPhase = [[''
-		mkdir -p $out/lib/lua/${lua.luaversion}
-		install -p bit.so $out/lib/lua/${lua.luaversion}
-		'' ]]
+		-- installPhase = [[''
+		-- mkdir -p $out/lib/lua/${lua.luaversion}
+		-- install -p bit.so $out/lib/lua/${lua.luaversion}
+		-- '' ]]
 	}
 
    -- todo parse license too
