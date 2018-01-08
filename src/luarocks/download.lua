@@ -7,7 +7,9 @@ local queries = require("luarocks.queries")
 local fs = require("luarocks.fs")
 local dir = require("luarocks.dir")
 
-local function get_file(filename)
+
+-- @return boolean or (nil, string): true if successful or nil followed
+function download.get_file(filename)
    local protocol, pathname = dir.split_url(filename)
    if protocol == "file" then
       local ok, err = fs.copy(pathname, fs.current_dir(), "read")
@@ -21,6 +23,12 @@ local function get_file(filename)
    end
 end
 
+--- Driver function for the "download" command.
+-- @param name string: a rock name.
+-- @param version string or nil: if the name of a package is given, a
+-- version may also be passed.
+-- @return boolean or (nil, string): true if successful or nil followed
+-- by an error message.
 function download.download(arch, name, version, all)
    local substring = (all and name == "")
    local query = queries.new(name, version, substring, arch)
@@ -38,7 +46,7 @@ function download.download(arch, name, version, all)
                if item.arch ~= "installed" then
                   has_result = true
                   local filename = path.make_url(item.repo, name, version, item.arch)
-                  local ok, err = get_file(filename)
+                  local ok, err = download.get_file(filename)
                   if not ok then
                      all_ok = false
                      any_err = any_err .. "\n" .. err
@@ -55,7 +63,8 @@ function download.download(arch, name, version, all)
       local url
       url, search_err = search.find_suitable_rock(query, true)
       if url then
-         return get_file(url)
+		  -- todo could reutrn the url too
+         return download.get_file(url)
       end
    end
    return nil, "Could not find a result named "..name..(version and " "..version or "")..

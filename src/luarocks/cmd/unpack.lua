@@ -70,7 +70,46 @@ local function unpack_rock(rock_file, dir_name, kind)
    end
    ok, err = fs.change_dir(dir_name)
    if not ok then return nil, err end
-   local rockspec_file = dir_name..".rockspec"
+   -- local rockspec_file = dir_name..".rockspec"
+   -- todo look for the rockspeck
+   -- find local rockspec
+   -- fs.find(dir_name)
+
+
+   -- return base_name:match("(.*)%.[^.]*.rock") .. ".rockspec"
+   rockspec_file = nil
+   for _, file in ipairs(fs.find(dir_name)) do
+      -- local full_path = dir.path(install_dir, file)
+      -- local walk = tree
+      -- local last
+      -- local last_name
+	  if file:match("(.*)-([^-]+-%d+)%.(rockspec)") then
+		rockspec_file = dir_name.."/"..file
+		break
+	  end
+	  -- if file:match("(.*)%.[^.]*.rock") .. ".rockspec"
+      -- for name in file:gmatch("[^/]+") do
+      --    local next = walk[name]
+      --    if not next then
+      --       next = {}
+      --       walk[name] = next
+      --    end
+      --    last = walk
+      --    last_name = name
+      --    walk = next
+      -- end
+      -- if fs.is_file(full_path) then
+      --    local sum, err = fs.get_md5(full_path)
+      --    if not sum then
+      --       return nil, "Failed producing checksum: "..tostring(err)
+      --    end
+      --    last[last_name] = sum
+      -- end
+   end
+   -- local rockspec_file = dir_name..".rockspec"
+
+   util.printout("rockspec=", rockspec_file)
+   -- base_name:match("(.*)%.([^.]+)%.(rock)$")
    local rockspec, err = fetch.load_rockspec(rockspec_file)
    if not rockspec then
       return nil, "Failed loading rockspec "..rockspec_file..": "..err
@@ -97,9 +136,9 @@ end
 -- @param file string: A rockspec or .rock URL.
 -- @return boolean or (nil, string): true if successful or nil followed
 -- by an error message.
-local function run_unpacker(file, force)
+local function run_unpacker(file, force, silent)
    assert(type(file) == "string")
-   
+
    local base_name = dir.base_name(file)
    local dir_name, kind, extension = base_name:match("(.*)%.([^.]+)%.(rock)$")
    if not extension then
@@ -136,13 +175,18 @@ local function run_unpacker(file, force)
             return nil, "Failed copying unpacked rockspec into unpacked source directory."
          end
       end
-      util.printout()   
-      util.printout("Done. You may now enter directory ")
-      util.printout(dir.path(dir_name, rockspec.source.dir))
-      util.printout("and type 'luarocks make' to build.")
+      -- util.printout()
+      -- util.printout("Done. You may now enter directory ")
+      -- util.printout(dir.path(dir_name, rockspec.source.dir))
+      -- util.printout("and type 'luarocks make' to build.")
    end
    util.remove_scheduled_function(rollback)
-   return true
+   -- or rockspec.source.file
+   -- prettyprint
+   -- print("file", file)
+   -- print(rockspec.local_filename)
+   return true, dir.path(dir_name, rockspec.source.dir, 
+   	dir.base_name(rockspec.local_filename))
 end
 
 --- Driver function for the "unpack" command.

@@ -11,6 +11,9 @@ local path = require("luarocks.path")
 local util = require("luarocks.util")
 local repos = require("luarocks.repos")
 local fetch = require("luarocks.fetch")
+local search = require("luarocks.search")
+local unpack = require("luarocks.unpack")
+local download = require("luarocks.download")
 local fs = require("luarocks.fs")
 local dir = require("luarocks.dir")
 local deps = require("luarocks.deps")
@@ -72,56 +75,65 @@ end
 
 
 -- build 'src' component of the derivation
-function get_src(spec)
+-- function get_src2(spec, url)
+-- 	-- todo use url
+-- 	local success, msg=	unpack.command(flags, name, version)
+-- end
+
+function get_src(spec, url)
 -- end
 -- function nix.get_checksum(spec)
-
+-- TODO download the src.rock unpack it and get the hash around it ?
 	local prefetch_url_program = "/run/current-system/sw/bin/nix-prefetch-url"
 	local prefetch_git_program = "/home/teto/.nix-profile/bin/nix-prefetch-git"
 
-	local command = prefetch_url_program.." "..spec.source.url
+	-- local url = spec.source.url
+	-- TODO just write fetchrock
+	-- msg is path to rockspec
+	local command = prefetch_url_program.." "..url
 	local checksum = nil
 	local fetch_method = nil
 	-- fetchgit url/rev/sha256
 	-- todo check lua-msgpack
-	if spec.source.url:match("^git")  then
-		-- with quiet flag we get only json"--quiet"
-		-- quiet to print only the json
-		command = prefetch_git_program.." --quiet --rev "..tostring(spec.source.tag).." "..spec.source.url
-		-- a nil value ?
-		local json_ok, json = util.require_json()
-		if not json_ok then
-			util.printerr("No json available")
-			return nil, "A JSON library is required for this command. "..json
-		end
+	-- if spec.source.url:match("^git")  then
+	-- 	-- with quiet flag we get only json"--quiet"
+	-- 	-- quiet to print only the json
+	-- 	command = prefetch_git_program.." --quiet --rev "..tostring(spec.source.tag).." "..spec.source.url
+	-- 	-- a nil value ?
+	-- 	local json_ok, json = util.require_json()
+	-- 	if not json_ok then
+	-- 		util.printerr("No json available")
+	-- 		return nil, "A JSON library is required for this command. "..json
+	-- 	end
 
-		-- print("running command: "..command)
-		local r = io.popen(command, 'r')
-		-- hwy did I need a * here ?
-		local out, err, retcode = r:read("*a")
-		-- print("output")
-		-- print(out)
-		-- # table.concat(out)
-		local res = json.decode(out)
-		-- print("res=", res)
-		-- util.printout("res=", res.sha256)
-		checksum = res.sha256
-		fetchmethod = ""
+	-- 	-- print("running command: "..command)
+	-- 	local r = io.popen(command, 'r')
+	-- 	-- hwy did I need a * here ?
+	-- 	local out, err, retcode = r:read("*a")
+	-- 	-- print("output")
+	-- 	-- print(out)
+	-- 	-- # table.concat(out)
+	-- 	local res = json.decode(out)
+	-- 	-- print("res=", res)
+	-- 	-- util.printout("res=", res.sha256)
+	-- 	checksum = res.sha256
+	-- 	fetchmethod = ""
 
-		local rev = spec.source.branch or spec.source.tag
-		util.printerr(spec.package..": rev=", rev)
- 		return " fetchfromgit "..table2str({
-			url=util.LQ(spec.source.url),
-			rev=util.LQ(rev),
-			sha256=util.LQ(checksum)
-		})
-	else
+	-- 	local rev = spec.source.branch or spec.source.tag
+	-- 	util.printerr(spec.package..": rev=", rev)
+ 		-- return " fetchfromgit "..table2str({
+	-- 		url=util.LQ(spec.source.url),
+	-- 		rev=util.LQ(rev),
+	-- 		sha256=util.LQ(checksum)
+	-- 	})
+	-- else
 		-- utils.printout()
 		local r = io.popen(command)
 		checksum=r:read()
 		fetchmethod = "fetchurl"
-		return " fetchurl "..table2str({url=util.LQ(spec.source.url), sha256=util.LQ(checksum)})
-	end
+		-- spec.source.url
+		return " fetchurl "..table2str({url=util.LQ(url), sha256=util.LQ(checksum)})
+	-- end
 
 end
 
@@ -165,15 +177,50 @@ end
 --      sha256 = "16fffbrgfcw40kskh2bn9q7m3gajffwd2f35rafynlnd7llwj1qj";
 --    };
 --
+-- TODO take into account external_dependencies !!
 function nix.convert2nix(name)
+	-- todo just download/unpack
 	-- for now we accept only rockspec_filename
-   if not name:match("%.rockspec$") then
-	return nil, "Don't know what to do with "..name
-   end
-   rockspec_filename = name
+	flags = {
+		source= 1
+	}
+	version=nil
+    local query = search.make_query(name, version)
+	query.arch = "src"
+    local url, search_err = search.find_suitable_rock(query)
+	if not url then
+		return false, search_err
+	end
+
+    local filename, err = download.get_file(url)
+
+	-- to speed up testing
+	-- url = "https://luarocks.org/luabitop-1.0.2-1.src.rock"
+	-- filename = "/home/teto/luarocks/src/luabitop-1.0.2-1.src.rock"
+	-- util.printout("downloading fron url ", url)
+	-- util.printout("got file ", filename)
+
+	-- local path, msg = download.command(flags, name, version)
+
+	flags["force"] = 1
+	-- can get url from rockspec.url maybe ?
+	local success, msg=	unpack.command(flags, filename, version)
+	if not success then
+		print("failure while unpacking ?")
+		return success, msg
+	end
+-- path.rockspec_file(name, version, tree)
+	-- else we have the path to the rockspec
+	-- util.printout("Loading rockspec from ", msg)
+   -- if not name:match(".rockspec$") then
+	-- return nil, "Don't know what to do with "..name
+   -- end
+   -- rockspec_filename = name
+   rockspec_filename = msg
       -- return build.build_rockspec(name, true, false, deps_mode, build_only_deps)
-   local spec, err, errcode = fetch.load_rockspec(rockspec_filename)
+   local spec, err, errcode = fetch.load_rockspec(rockspec_filename, "..")
    if not spec then
+	   util.printerr(err)
 	   return nil, err
 	end
 
@@ -206,14 +253,15 @@ function nix.convert2nix(name)
 
 	-- todo check constraints to choose the correct version of lua
 	local attrs = {
-		name=util.LQ(spec.name),
+		pname=util.LQ(spec.name),
 		version=util.LQ(spec.version),
 		-- we should run sthg to get sha
-		src=get_src(spec),
+		src=get_src(spec, url),
+		-- src=get_src2(spec),
 		-- add license ? MAINTAINERS
 		-- add convert_license(spec.description.license) in meta
 		meta= table2str({
-			homepage=util.LQ(spec.description.homepage),
+			homepage=util.LQ(spec.description.homepage or spec.source.url),
 			description=util.LQ(spec.description.summary),
 			license=convert2nixLicense(spec)
 		}),

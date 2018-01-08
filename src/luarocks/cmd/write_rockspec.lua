@@ -358,7 +358,7 @@ function write_rockspec.command(args)
          local_dir = nil
       end
    end
-   
+
    if not local_dir then
       local_dir = "."
    end
@@ -397,14 +397,14 @@ function write_rockspec.command(args)
    end
    
    fill_as_builtin(rockspec, libs)
-      
+
    rockspec_cleanup(rockspec)
    
    persist.save_from_table(filename, rockspec, type_rockspec.order)
 
-   util.printout()   
+   util.printout()
    util.printout("Wrote template at "..filename.." -- you should now edit and finish it.")
-   util.printout()   
+   util.printout()
 
    return true
 end
