@@ -64,7 +64,7 @@ function download.download(arch, name, version, all)
       url, search_err = search.find_suitable_rock(query, true)
       if url then
 		  -- todo could reutrn the url too
-         return download.get_file(url)
+         return download.get_file(url), url
       end
    end
    return nil, "Could not find a result named "..name..(version and " "..version or "")..

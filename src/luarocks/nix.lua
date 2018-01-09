@@ -132,7 +132,7 @@ function get_src(spec, url)
 		checksum=r:read()
 		fetchmethod = "fetchurl"
 		-- spec.source.url
-		return " fetchurl "..table2str({url=util.LQ(url), sha256=util.LQ(checksum)})
+		return " fetchurl "..table2str({url=(url), sha256=util.LQ(checksum)})
 	-- end
 
 end
@@ -162,6 +162,7 @@ end
 --
 --
 function convert_license(value)
+	return value
 end
 -- function nix.convert2nix(name)
 
@@ -177,7 +178,19 @@ end
 --      sha256 = "16fffbrgfcw40kskh2bn9q7m3gajffwd2f35rafynlnd7llwj1qj";
 --    };
 --
+--
+
+-- TODO
+function convert_rock2nix(rock)
+end
+
+
+
+function convert_rockspec2nix(rockspec)
+end
+
 -- TODO take into account external_dependencies !!
+-- @param name lua package name e.g.: 'lpeg', 'mpack' etc
 function nix.convert2nix(name)
 	-- todo just download/unpack
 	-- for now we accept only rockspec_filename
@@ -185,44 +198,55 @@ function nix.convert2nix(name)
 		source= 1
 	}
 	version=nil
-    local query = search.make_query(name, version)
-	query.arch = "src"
-    local url, search_err = search.find_suitable_rock(query)
-	if not url then
-		return false, search_err
-	end
+    -- local query = search.make_query(name, version)
+	-- arch can be "src" or "rockspec"
+	-- query.arch = "rockspec"
+    -- local url, search_err = search.find_suitable_rock(query)
+	-- if not url then
+		-- return false, search_err
+	-- end
 
-    local filename, err = download.get_file(url)
+    -- local filename, err = download.get_file(url)
+	-- arch, name, version, all
+	-- util.printout("name:", name)
+    local rock_filename, msg = download.download("src", name, version, nil)
+	if not rock_filename then
+		print("failure while downloading ?")
+		return msg, "failure while downloading ?"
+	end
 
 	-- to speed up testing
 	-- url = "https://luarocks.org/luabitop-1.0.2-1.src.rock"
 	-- filename = "/home/teto/luarocks/src/luabitop-1.0.2-1.src.rock"
-	-- util.printout("downloading fron url ", url)
-	-- util.printout("got file ", filename)
+	local url = msg
+	util.printout("downloading from url ", url)
+	util.printout("got file ", rock_filename)
 
 	-- local path, msg = download.command(flags, name, version)
 
+	-- to overwrite folders 
 	flags["force"] = 1
 	-- can get url from rockspec.url maybe ?
-	local success, msg=	unpack.command(flags, filename, version)
-	if not success then
+
+	-- should work for both
+	local spec, msg =	unpack.command(flags, rock_filename, version)
+	if not spec then
 		print("failure while unpacking ?")
-		return success, msg
+		return nil, msg
 	end
--- path.rockspec_file(name, version, tree)
-	-- else we have the path to the rockspec
-	-- util.printout("Loading rockspec from ", msg)
-   -- if not name:match(".rockspec$") then
-	-- return nil, "Don't know what to do with "..name
-   -- end
-   -- rockspec_filename = name
-   rockspec_filename = msg
-      -- return build.build_rockspec(name, true, false, deps_mode, build_only_deps)
-   local spec, err, errcode = fetch.load_rockspec(rockspec_filename, "..")
-   if not spec then
-	   util.printerr(err)
-	   return nil, err
-	end
+
+   -- rockspec_filename = msg
+   -- util.printout("trying to load ", success, rockspec_filename)
+   -- local spec, err = unpack.unpack_rock(
+	-- local unpack_dir, err = fetch.fetch_and_unpack_rock(rock_filename, "..")
+   -- if not unpack_dir then
+	   -- return nil, err
+	-- end 
+   -- local spec, err, errcode = fetch.load_rockspec(rockspec_filename, "..")
+   -- if not spec then
+	   -- util.printerr(err)
+	   -- return nil, err
+	-- end
 
    -- deps.parse_dep(dep) is called fetch.load_local_rockspec so 
    -- so we havebuildLuaPackage defined in
@@ -261,7 +285,7 @@ function nix.convert2nix(name)
 		-- add license ? MAINTAINERS
 		-- add convert_license(spec.description.license) in meta
 		meta= table2str({
-			homepage=util.LQ(spec.description.homepage or spec.source.url),
+			homepage=spec.description.homepage or spec.source.url,
 			description=util.LQ(spec.description.summary),
 			license=convert2nixLicense(spec)
 		}),
@@ -312,12 +336,12 @@ end
 -- error message otherwise. exitcode is optionally returned.
 function nix.command(flags, name, version)
    if type(name) ~= "string" then
-      return nil, "Argument missing. "..util.see_help("build")
+      return nil, "Expects rockspeck filename as first argument. "..util.see_help("build")
    end
    assert(type(version) == "string" or not version)
    -- print("hello world name=", name)
    local res, err = nix.convert2nix(name)
-   return res
+   return res, err
 
    -- if flags["pack-binary-rock"] then
    --    return pack.pack_binary_rock(name, version, do_build, name, version, deps.get_deps_mode(flags))
