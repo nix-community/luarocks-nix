@@ -211,7 +211,12 @@ function nix.convert2nix(name)
 	-- util.printout("name:", name)
     local rock_filename, msg = download.download("src", name, version, nil)
 	if not rock_filename then
-		print("failure while downloading ?")
+
+-- source = {
+--   url = 'https://github.com/neovim/lua-client/archive/' .. version .. '.tar.gz',
+--   dir = 'lua-client-' .. version,
+-- }
+		print("failure while downloading ? src=", msg)
 		return msg, "failure while downloading ?"
 	end
 
