@@ -84,13 +84,6 @@ local function convert_rock2nix(name, version)
 	}
 
 	-- fetch.fetch_and_unpack_rock(rock_file,
-    -- local query = search.make_query(name, version)
-	-- arch can be "src" or "rockspec"
-	-- query.arch = "rockspec"
-    -- local url, search_err = search.find_suitable_rock(query)
-	-- if not url then
-		-- return false, search_err
-	-- end
 
     -- local filename, err = download.get_file(url)
 	-- arch, name, version, all
@@ -217,20 +210,25 @@ function nix.command(flags, name, version)
 	-- 	-- table or (nil, string, [string])
 	-- 	local res, err = convert_rockspec2nix(name, version)
 	-- else if
-	if name:match(".*%.rock") or name:match(".*%.rockspec") then
+	if name:match(".*%.rock")  then
+		-- nil = dest
+		fetch.fetch_and_unpack_rock(name, nil)
 		unpack_rockspec
 		return run_unpacker(name, flags["force"])
+	elseif name:match(".*%.rockspec") then
+		fetch.get_sources(rockspec, extract, dest_dir)
 	else
 		local search = require("luarocks.search")
-		return search.act_on_src_or_rockspec(run_unpacker, name:lower(), version)
-	end
--- search.find_suitable_rock(query)
--- fetch.fetch_and_unpack_rock(rock_file, dest)
 
-	-- local url, err = search.find_suitable_rock(search.make_query(name:lower(), version))
-	-- if not url then
-	-- 	return nil, err
-	-- end
+		local query = search.make_query(name, version)
+		arch can be "src" or "rockspec"
+		query.arch = "rockspec"
+		local url, search_err = search.find_suitable_rock(query)
+		if not url then
+			return false, search_err
+		end
+		-- return search.act_on_src_or_rockspec(run_unpacker, name:lower(), version)
+	end
 
    -- print("hello world name=", name)
    -- todo should expect a spec + rock file ?
