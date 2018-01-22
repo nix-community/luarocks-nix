@@ -66,6 +66,35 @@ function get_src(spec, url)
 	return attrSet
 end
 
+	-- flags = {
+	-- 	source= 1
+	-- }
+    -- -- local rock_filename, msg = download.download("src", name, version, nil)
+	-- -- if not rock_filename then
+		-- -- print("failure while downloading ? src=", msg)
+		-- -- return msg, "failure while downloading ?"
+	-- -- end
+
+	-- -- to speed up testing
+	-- -- url = "https://luarocks.org/luabitop-1.0.2-1.src.rock"
+	-- -- filename = "/home/teto/luarocks/src/luabitop-1.0.2-1.src.rock"
+	-- -- local url = msg
+	-- -- util.printout("downloading from url ", url)
+	-- -- util.printout("got file ", rock_filename)
+
+	-- -- local path, msg = download.command(flags, name, version)
+
+	-- -- to overwrite folders
+	-- flags["force"] = 1
+	-- -- can get url from rockspec.url maybe ?
+
+	-- -- should work for both
+	-- local spec, msg = unpack.command(flags, rock_filename, version)
+	-- if not spec then
+		-- print("failure while unpacking ?")
+		-- return nil, msg
+	-- end
+
 
 -- TODO fetch sources/pack it
 local function convert_rockspec2nix(name)
@@ -76,43 +105,16 @@ end
 -- fetch.fetch_sources
 -- fetch.fetch_and_unpack_rock(rock_file, dest)
 -- @param name lua package name e.g.: 'lpeg', 'mpack' etc
-local function convert_rock2nix(name, version)
+local function convert_spec2nix(spec, rock)
+	assert ( spec )
 	-- todo just download/unpack
 	-- for now we accept only rockspec_filename
-	flags = {
-		source= 1
-	}
 
 	-- fetch.fetch_and_unpack_rock(rock_file,
 
     -- local filename, err = download.get_file(url)
 	-- arch, name, version, all
 	-- util.printout("name:", name)
-    local rock_filename, msg = download.download("src", name, version, nil)
-	if not rock_filename then
-		print("failure while downloading ? src=", msg)
-		return msg, "failure while downloading ?"
-	end
-
-	-- to speed up testing
-	-- url = "https://luarocks.org/luabitop-1.0.2-1.src.rock"
-	-- filename = "/home/teto/luarocks/src/luabitop-1.0.2-1.src.rock"
-	local url = msg
-	util.printout("downloading from url ", url)
-	util.printout("got file ", rock_filename)
-
-	-- local path, msg = download.command(flags, name, version)
-
-	-- to overwrite folders
-	flags["force"] = 1
-	-- can get url from rockspec.url maybe ?
-
-	-- should work for both
-	local spec, msg = unpack.command(flags, rock_filename, version)
-	if not spec then
-		print("failure while unpacking ?")
-		return nil, msg
-	end
 
    -- rockspec_filename = msg
    -- util.printout("trying to load ", success, rockspec_filename)
@@ -204,7 +206,7 @@ function nix.command(flags, name, version)
 		return nil, "Expects package name as first argument. "..util.see_help("nix")
 	end
 
-	assert(type(version) == "string" or not version)
+	-- assert(type(version) == "string" or not version)
 
 	-- if name:match("%.rockspec$")
 	-- 	-- table or (nil, string, [string])
@@ -212,28 +214,58 @@ function nix.command(flags, name, version)
 	-- else if
 	if name:match(".*%.rock")  then
 		-- nil = dest
-		fetch.fetch_and_unpack_rock(name, nil)
-		unpack_rockspec
-		return run_unpacker(name, flags["force"])
+		-- should return path to the rockspec
+		local spec, msg = fetch.fetch_and_unpack_rock(name, nil)
+		if not spec then
+			util.printerr("")
+		end
+		-- unpack_rockspec
+		-- return run_unpacker(name, flags["force"])
+		return convert_spec2nix(spec, name)
 	elseif name:match(".*%.rockspec") then
-		fetch.get_sources(rockspec, extract, dest_dir)
+		local spec, err = fetch.load_rockspec(name, nil)
+		if not spec then
+			return 1, err
+		end
+		print("Loaded locally")
+		-- rock_file, tmp_dir = fetch.fetch_sources(rockspec, extract, dest_dir)
+		convert_spec2nix(spec, nil)
+		return true
 	else
 		local search = require("luarocks.search")
 
 		local query = search.make_query(name, version)
-		arch can be "src" or "rockspec"
-		query.arch = "rockspec"
+		-- arch can be "src" or "rockspec"
+		-- query.arch = "rockspec"
+		query.arch = "src"
 		local url, search_err = search.find_suitable_rock(query)
 		if not url then
+			util.printerr("can't find suitable rock " )
 			return false, search_err
 		end
+
+		print("url=", url)
+		-- string or (nil, string, [string]): the directory containing the contents
+		local dir, err, err2 = fetch.fetch_and_unpack_rock(url, dest)
+		if not dir then
+			return false, err
+		end
+
+		-- TODO find local rockspec from within rock file
+		spec, err = fetch.load_local_rockspec(name, nil)
+		if not spec then
+			return false, err
+		end
+		local res, err = convert_spec2nix(spec, nil)
+		-- return res, err
 		-- return search.act_on_src_or_rockspec(run_unpacker, name:lower(), version)
+		return true
 	end
 
    -- print("hello world name=", name)
    -- todo should expect a spec + rock file ?
-   local res, err = convert_rock2nix(name, version)
-   return res, err
+   -- local res, err = convert_rock2nix(name, version)
+   return false, res, err
 
    -- if flags["pack-binary-rock"] then
    --    return pack.pack_binary_rock(name, version, do_build, name, version, deps.get_deps_mode(flags))
