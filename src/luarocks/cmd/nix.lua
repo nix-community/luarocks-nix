@@ -25,7 +25,7 @@ local cfg = require("luarocks.core.cfg")
 -- local pretty = require("pl.pretty")
 
 nix.help_summary = "Build/compile a rock."
-nix.help_arguments = "{<rockspec>|<rock>|<name> [<version>]}"
+nix.help_arguments = " {<rockspec>|<rock>|<name> [<version>]}"
 nix.help = [[
 Just set the package name
 ]]..util.deps_mode_help()
@@ -49,21 +49,18 @@ local function convert2nixLicense(spec)
 end
 
 
-function get_src(spec, url)
+function get_checksum(rock_file)
 	-- TODO download the src.rock unpack it and get the hash around it ?
 	local prefetch_url_program = "nix-prefetch-url"
 
-	-- local url = spec.source.url
-	-- TODO just write fetchrock
-	-- msg is path to rockspec
-	local command = prefetch_url_program.." "..url
+	local command = prefetch_url_program.." "..(rock_file)
 	local checksum = nil
 	local fetch_method = nil
 	local r = io.popen(command)
 	checksum = r:read()
-	local attrSet = {url=(url), sha256=(checksum)}
+	-- local attrSet = {url=(url), sha256=(checksum)}
 
-	return attrSet
+	return checksum
 end
 
 	-- flags = {
@@ -102,50 +99,37 @@ local function convert_rockspec2nix(name)
 end
 
 -- TODO take into account external_dependencies !!
+-- @param spec table
+-- @param rock_url
+-- @param rock_file if nil, will be fetched from url
 -- fetch.fetch_sources
 -- fetch.fetch_and_unpack_rock(rock_file, dest)
 -- @param name lua package name e.g.: 'lpeg', 'mpack' etc
-local function convert_spec2nix(spec, rock)
+local function convert_spec2nix(spec, rock_url, rock_file)
 	assert ( spec )
-	-- todo just download/unpack
-	-- for now we accept only rockspec_filename
+	assert ( type(rock_url) == "string" )
 
-	-- fetch.fetch_and_unpack_rock(rock_file,
+	if not rock_file then
+		--
+		print("rock_url")
+		return false, "TODO download rock_spec"
+	end
 
-    -- local filename, err = download.get_file(url)
-	-- arch, name, version, all
-	-- util.printout("name:", name)
-
-   -- rockspec_filename = msg
-   -- util.printout("trying to load ", success, rockspec_filename)
-   -- local spec, err = unpack.unpack_rock(
-	-- local unpack_dir, err = fetch.fetch_and_unpack_rock(rock_filename, "..")
-   -- if not unpack_dir then
-	   -- return nil, err
-	-- end
-   -- local spec, err, errcode = fetch.load_rockspec(rockspec_filename, "..")
-   -- if not spec then
-	   -- util.printerr(err)
-	   -- return nil, err
-	-- end
-
-   -- deps.parse_dep(dep) is called fetch.load_local_rockspec so 
-   -- so we havebuildLuaPackage defined in
-   local dependencies = ""
-   for id, dep in ipairs(spec.dependencies)
-   do
-	   -- todo can I use a "join" func ?
-		-- deps.constraints is a table {op, version}
-		dependencies = dependencies.." "..dep.name
-	   -- print("name; ", id, "dep:", dep.name)
-   end
+	-- deps.parse_dep(dep) is called fetch.load_local_rockspec so 
+	-- so we havebuildLuaPackage defined in
+	local dependencies = ""
+	for id, dep in ipairs(spec.dependencies)
+	do
+		-- todo can I use a "join" func ?
+			-- deps.constraints is a table {op, version}
+			dependencies = dependencies.." "..dep.name
+		-- print("name; ", id, "dep:", dep.name)
+	end
 
     -- the good thing is zat nix-prefetch-zip caches downloads in the store
-	-- local checksum = nix.get_checksum(spec)
-	-- util.printerr("checksum=",checksum)
-
 	-- todo check constraints to choose the correct version of lua
-	local src = get_src(spec, url)
+	-- local src = get_src(spec, url)
+	local checksum = get_checksum(rock_file)
 
    -- todo parse license too
    -- see https://stackoverflow.com/questions/1405583/concatenation-of-strings-in-lua for the best method to concat strings
@@ -157,8 +141,8 @@ local function convert_spec2nix(spec, rock)
 		pname   = ]]..util.LQ(spec.name)..[[;
 		version = ]]..spec.version..[[;
 		src     = fetchurl {
-			url    = ]]..(src.url)..[[;
-			sha256 = ]]..util.LQ(src.sha256)..[[;
+			url    = ]]..url..[[;
+			sha256 = ]]..util.LQ(checksum)..[[;
 		};
 
 		propagatedBuildInputs = []]..dependencies..[[];
@@ -176,21 +160,54 @@ local function convert_spec2nix(spec, rock)
 	print(header)
 	-- str = str..
 	-- print(pretty.write(attrs))
-   -- ret, err = fd:write(str)
-   local err = false
+	-- ret, err = fd:write(str)
+	local err = false
 
-   -- that's where shit happens
-   -- print(pretty.write(str))
+	-- that's where shit happens
+	-- print(pretty.write(str))
 
-   ret = true
-   if not ret then
-	   util.printerr("Error happened: "..err)
-	end
+	ret = true
+	if not ret then
+		util.printerr("Error happened: "..err)
+		end
 
-   return true
+	return true
 end
 
+--
+--
+-- @return (spec, url, rock_file)
+function load_rock_from_name (name, version)
+	local search = require("luarocks.search")
 
+	local query = search.make_query(name, version)
+	-- arch can be "src" or "rockspec"
+	-- query.arch = "rockspec"
+	query.arch = "src"
+	local url, search_err = search.find_suitable_rock(query)
+	if not url then
+		util.printerr("can't find suitable rock " )
+		return false, search_err
+	end
+
+	print("url=", url)
+	-- string or (nil, string, [string]): the directory containing the contents
+	-- local archive, dir_name, ret = fetch.get_sources(rockspec, true, nil)
+
+	local rock_file, tmp_dirname, errcode = fetch.fetch_url_at_temp_dir(url, "luarocks-rock-"..name)
+	if not rock_file then
+		return nil, "Could not fetch rock file: " .. tmp_dirname, errcode
+	end
+
+	-- print("tmp_dirname=", tmp_dirname)
+	-- local dir_name = tmp_dirname
+	local dir_name, err, errcode = fetch.fetch_and_unpack_rock(rock_file, dest)
+	if not dir_name then
+		return false, err, errcode
+	end
+	local rockspec_file = path.rockspec_name_from_rock(rock_file)
+	return url, rock_file, rockspec_file
+end
 
 --- Driver function for "convert2nix" command.
 -- we need to have both the rock and the rockspec
@@ -205,7 +222,8 @@ function nix.command(flags, name, version)
 	if type(name) ~= "string" then
 		return nil, "Expects package name as first argument. "..util.see_help("nix")
 	end
-
+	local spec, rock_url, rock_file
+	local rockspeck_name
 	-- assert(type(version) == "string" or not version)
 
 	-- if name:match("%.rockspec$")
@@ -215,52 +233,52 @@ function nix.command(flags, name, version)
 	if name:match(".*%.rock")  then
 		-- nil = dest
 		-- should return path to the rockspec
-		local spec, msg = fetch.fetch_and_unpack_rock(name, nil)
+		-- TODO I would need to find its url !
+		local rock_file = name
+		local spec, msg = fetch.fetch_and_unpack_rock(rock_file, nil)
 		if not spec then
-			util.printerr("")
+			return false, msg
 		end
+		rockspeck_name = spec.name
+		rockspeck_version = spec.version
 		-- unpack_rockspec
 		-- return run_unpacker(name, flags["force"])
-		return convert_spec2nix(spec, name)
+		-- return convert_spec2nix(spec, name)
+
 	elseif name:match(".*%.rockspec") then
 		local spec, err = fetch.load_rockspec(name, nil)
 		if not spec then
-			return 1, err
-		end
-		print("Loaded locally")
-		-- rock_file, tmp_dir = fetch.fetch_sources(rockspec, extract, dest_dir)
-		convert_spec2nix(spec, nil)
-		return true
-	else
-		local search = require("luarocks.search")
-
-		local query = search.make_query(name, version)
-		-- arch can be "src" or "rockspec"
-		-- query.arch = "rockspec"
-		query.arch = "src"
-		local url, search_err = search.find_suitable_rock(query)
-		if not url then
-			util.printerr("can't find suitable rock " )
-			return false, search_err
-		end
-
-		print("url=", url)
-		-- string or (nil, string, [string]): the directory containing the contents
-		local dir, err, err2 = fetch.fetch_and_unpack_rock(url, dest)
-		if not dir then
 			return false, err
 		end
+		print("Loaded locally")
+		rockspeck_name = spec.name
+		rockspeck_version = spec.version
+		-- spec, rock_url, rock_file = load_rock_from_name (spec.name, spec.version)
+	else
+		-- copied from unpack_rock
+		-- ok, err = fs.change_dir(dir_name)
+		-- if not ok then return nil, err end
+		rockspeck_name = name
+		rockspeck_version = version
+		-- print("rockspec", rockspec_file)
+		-- rockspec_file = dir_name.."/"..rockspec_file
+		-- print("rockspec", rockspec_file)
 
-		-- TODO find local rockspec from within rock file
-		spec, err = fetch.load_local_rockspec(name, nil)
+		-- copied from build_rock
+		local rockspec_file = path.rockspec_name_from_rock(rock_file)
+
+		spec, err = fetch.load_local_rockspec(rockspec_file, nil)
 		if not spec then
 			return false, err
 		end
-		local res, err = convert_spec2nix(spec, nil)
-		-- return res, err
-		-- return search.act_on_src_or_rockspec(run_unpacker, name:lower(), version)
-		return true
+
 	end
+
+	spec, rock_url, rock_file = load_rock_from_name (rockspeck_name, spec.version)
+
+	if not spec
+	local res, err = convert_spec2nix(spec, rock_file)
+	return true
 
    -- print("hello world name=", name)
    -- todo should expect a spec + rock file ?
