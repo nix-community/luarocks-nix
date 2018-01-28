@@ -11,16 +11,9 @@ package.loaded["luarocks.nix"] = nix
 local pack = require("luarocks.pack")
 local path = require("luarocks.path")
 local util = require("luarocks.util")
-local repos = require("luarocks.repos")
 local fetch = require("luarocks.fetch")
 local search = require("luarocks.search")
-local unpack = require("luarocks.cmd.unpack")
-local download = require("luarocks.download")
-local fs = require("luarocks.fs")
-local dir = require("luarocks.dir")
 local deps = require("luarocks.deps")
-local manif = require("luarocks.manif")
-local remove = require("luarocks.remove")
 local vers = require("luarocks.vers")
 local cfg = require("luarocks.core.cfg")
 
@@ -41,7 +34,6 @@ local function convert2nixLicense(spec)
     -- checksum = r:read()
     -- return "stdenv.lib.licenses.mit"
 
-    -- 
     license = {
       fullName = spec.description.license;
       -- url = http://sales.teamspeakusa.com/licensing.php;
@@ -108,7 +100,7 @@ local function convert_spec2nix(spec, rock_url, rock_file)
 		-- else
 		-- 	entry = entry.." no constraint"
 		-- end
-        dependencies = dependencies..entry..""
+        dependencies = dependencies..entry.." "
     end
 
     -- the good thing is zat nix-prefetch-zip caches downloads in the store
@@ -123,25 +115,25 @@ local function convert_spec2nix(spec, rock_url, rock_file)
    -- we could try to map the luarocks licence to nixpkgs license
    -- see convert2nixLicense
     local header = spec.name..[[ = buildLuaPackage rec {
-      pname = ]]..util.LQ(spec.name)..[[;
-      version = ]]..spec.version..[[;
-      src       = fetchurl {
-        url    = ]]..rock_url..[[;
-        sha256 = ]]..util.LQ(checksum)..[[;
-      };
+  pname = ]]..util.LQ(spec.name)..[[;
+  version = ]]..util.LQ(spec.version)..[[;
+  src = fetchurl {
+    url    = ]]..rock_url..[[;
+    sha256 = ]]..util.LQ(checksum)..[[;
+  };
 
-      propagatedBuildInputs = []]..dependencies..[[];
+  propagatedBuildInputs = []]..dependencies..[[];
 
-      meta = {
-        homepage = ]]..(spec.description.homepage or spec.source.url)..[[;
-        description=]]..util.LQ(spec.description.summary)..[[;
-        license = {
-          fullName = ]]..util.LQ(spec.description.license)..[[;
-        };
-        buildType=]]..util.LQ(spec.build.type)..[[;
-      };
+  meta = {
+    homepage = ]]..(spec.description.homepage or spec.source.url)..[[;
+    description=]]..util.LQ(spec.description.summary)..[[;
+    license = {
+      fullName = ]]..util.LQ(spec.description.license)..[[;
     };
-    ]]
+    buildType=]]..util.LQ(spec.build.type)..[[;
+  };
+};
+]]
 
     return header
 end
