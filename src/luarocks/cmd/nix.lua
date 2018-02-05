@@ -90,6 +90,7 @@ local function convert_spec2nix(spec, rock_url, rock_file)
     -- deps.parse_dep(dep) is called fetch.load_local_rockspec so
     -- so we havebuildLuaPackage defined in
     local dependencies = ""
+    local external_deps = ""
     for id, dep in ipairs(spec.dependencies)
     do
 		-- disable comments with constraints as indentation is not respected
@@ -103,10 +104,26 @@ local function convert_spec2nix(spec, rock_url, rock_file)
         dependencies = dependencies..entry.." "
     end
 
+	-- TODO now we need to take into account
+	-- what to do with those
+  -- external_deps = " { "
+  external_deps = "["
+	if spec.external_dependencies then
+    for name, ext_files in util.sortedpairs(spec.external_dependencies)
+	  do
+		-- print("external dep ", name, ext_files)
+      local name = name:lower()
+		external_deps = external_deps..(name).." "
+		-- print("external dep ", dep)
+	  end
+	end
+  external_deps = external_deps.."]"
+
     -- the good thing is zat nix-prefetch-zip caches downloads in the store
     -- todo check constraints to choose the correct version of lua
     -- local src = get_src(spec, url)
     local checksum = get_checksum(rock_file or rock_url)
+    -- local checksum = "0x000"
 
    -- todo parse license too
    -- see https://stackoverflow.com/questions/1405583/concatenation-of-strings-in-lua for the best method to concat strings
@@ -117,12 +134,25 @@ local function convert_spec2nix(spec, rock_url, rock_file)
     local header = spec.name..[[ = buildLuaPackage rec {
   pname = ]]..util.LQ(spec.name)..[[;
   version = ]]..util.LQ(spec.version)..[[;
+
   src = fetchurl {
     url    = ]]..rock_url..[[;
     sha256 = ]]..util.LQ(checksum)..[[;
   };
+  ]]
 
-  propagatedBuildInputs = []]..dependencies..[[];
+  if external_deps then
+    header = header..[[
+  external_deps = []]..external_deps..[[];
+
+  ]]
+  end
+  -- # external deps if any
+    -- ]]..external_deps..[[
+
+  header = header..[[
+  propagatedBuildInputs = []]..dependencies..[[
+  ] ++ (builtins.attrToValues external_deps);
 
   meta = {
     homepage = ]]..(spec.description.homepage or spec.source.url)..[[;
@@ -217,6 +247,12 @@ function nix.command(flags, name, version)
         rockspec_name = spec.name
         rockspec_version = spec.version
         -- print("Loaded locally version ", rockspec_version)
+		-- -- test mode
+		-- local derivation, err = convert_spec2nix(spec, "")
+		-- if derivation then
+		-- 	print(derivation)
+		-- end
+		-- return true
     else
         rockspec_name = name
         rockspec_version = version
