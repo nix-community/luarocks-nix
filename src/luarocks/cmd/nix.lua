@@ -155,13 +155,14 @@ local function convert_spec2nix(spec, rock_url, rock_file)
   propagatedBuildInputs = []]..dependencies..[[
   ] ++  external_deps;
 
+  buildType=]]..util.LQ(spec.build.type)..[[;
+
   meta = {
     homepage = ]]..(spec.description.homepage or spec.source.url)..[[;
     description=]]..util.LQ(spec.description.summary)..[[;
     license = {
       fullName = ]]..util.LQ(spec.description.license)..[[;
     };
-    buildType=]]..util.LQ(spec.build.type)..[[;
   };
 };
 ]]
