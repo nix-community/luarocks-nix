@@ -104,21 +104,18 @@ local function convert_spec2nix(spec, rock_url, rock_file)
         dependencies = dependencies..entry.." "
     end
 
-	-- TODO now we need to take into account
-	-- what to do with those
-  -- external_deps = " { "
-  external_deps = " "
-	if spec.external_dependencies then
-    for name, ext_files in util.sortedpairs(spec.external_dependencies)
-	  do
-		-- print("external dep ", name, ext_files)
-		-- TODO might be good to check via nix-repl/nix instantiate if
-		-- a .dev output exists 
-      local name = name:lower()
-		external_deps = external_deps..(name)..".dev "
-		-- print("external dep ", dep)
-	  end
-	end
+  -- TODO need to map lua dependencies to nix ones,
+  -- try heuristics with nix-locate or manual table ?
+  --
+  -- what to do with those
+  -- external_deps = " "
+	-- if spec.external_dependencies then
+  --   for name, ext_files in util.sortedpairs(spec.external_dependencies)
+	  -- do
+  --     local name = name:lower()
+		-- external_deps = external_deps..(name)..".dev "
+	  -- end
+	-- end
 
     -- the good thing is zat nix-prefetch-zip caches downloads in the store
     -- todo check constraints to choose the correct version of lua
@@ -140,20 +137,12 @@ local function convert_spec2nix(spec, rock_url, rock_file)
     url    = ]]..rock_url..[[;
     sha256 = ]]..util.LQ(checksum)..[[;
   };
-  ]]
+]]
 
-  if external_deps then
-    header = header..[[
-  external_deps = []]..external_deps..[[];
-
-  ]]
-  end
-  -- # external deps if any
-    -- ]]..external_deps..[[
 
   header = header..[[
   propagatedBuildInputs = []]..dependencies..[[
-  ] ++  external_deps;
+  ];
 
   buildType=]]..util.LQ(spec.build.type)..[[;
 
