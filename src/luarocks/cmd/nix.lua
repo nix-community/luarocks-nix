@@ -94,7 +94,7 @@ local function convert_spec2nix(spec, rock_url, rock_file)
     for id, dep in ipairs(spec.dependencies)
     do
 		-- disable comments with constraints as indentation is not respected
-		local entry = dep.name
+		local entry = convert_pkg_name_to_nix(dep.name)
 		-- .." # "
 		-- if dep.constraints  then
 		-- 	entry = entry..(vers.show_dep(dep))
@@ -123,13 +123,12 @@ local function convert_spec2nix(spec, rock_url, rock_file)
     local checksum = get_checksum(rock_file or rock_url)
     -- local checksum = "0x000"
 
-   -- todo parse license too
    -- see https://stackoverflow.com/questions/1405583/concatenation-of-strings-in-lua for the best method to concat strings
    -- nixpkgs accept empty/inplace license see
-   -- https://github.com/NixOS/nixpkgs/blob/master/pkgs/applications/networking/instant-messengers/teamspeak/client.nix#L104-L108
    -- we could try to map the luarocks licence to nixpkgs license
-   -- see convert2nixLicense
-    local header = spec.name..[[ = buildLuaPackage rec {
+   -- see convert2nixLicense or/and hope for this https://github.com/luarocks/luarocks/issues/762
+   -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
+    local header = convert_pkg_name_to_nix(spec.name)..[[ = buildLuaPackage rec {
   pname = ]]..util.LQ(spec.name)..[[;
   version = ]]..util.LQ(spec.version)..[[;
 
@@ -147,7 +146,7 @@ local function convert_spec2nix(spec, rock_url, rock_file)
   buildType=]]..util.LQ(spec.build.type)..[[;
 
   meta = {
-    homepage = ]]..(spec.description.homepage or spec.source.url)..[[;
+    homepage = ]]..util.LQ(spec.description.homepage or spec.source.url)..[[;
     description=]]..util.LQ(spec.description.summary)..[[;
     license = {
       fullName = ]]..util.LQ(spec.description.license)..[[;
@@ -194,6 +193,14 @@ function load_rock_from_name (name, version)
         return nil, err
     end
     return spec, url, rock_file
+end
+
+function convert_pkg_name_to_nix(name)
+
+	-- replaces dot in names with underscores
+	-- % works as an escape character
+	local res, _ = name:gsub("%.", "_")
+	return res
 end
 
 --- Driver function for "convert2nix" command.
