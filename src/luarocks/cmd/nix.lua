@@ -91,16 +91,31 @@ local function convert_spec2nix(spec, rock_url, rock_file)
     -- so we havebuildLuaPackage defined in
     local dependencies = ""
     local external_deps = ""
+	local lua_constraints = ""
     for id, dep in ipairs(spec.dependencies)
     do
-		-- disable comments with constraints as indentation is not respected
 		local entry = convert_pkg_name_to_nix(dep.name)
-		-- .." # "
-		-- if dep.constraints  then
-		-- 	entry = entry..(vers.show_dep(dep))
-		-- else
-		-- 	entry = entry.." no constraint"
-		-- end
+		if entry == "lua" and dep.constraints then
+			local cons = {}
+			for _, c in ipairs(dep.constraints)
+			do
+				local constraint_str = nil
+				if c.op == ">=" then
+					constraint_str = " luaOlder "..util.LQ(tostring(c.version))
+				elseif c.op == "==" then
+					constraint_str = " lua.majorVersion != "..util.LQ(tostring(c.version))
+				elseif c.op == ">" then
+					constraint_str = " luaOlder "..util.LQ(tostring(c.version))
+				elseif c.op == "<" then
+					constraint_str = " luaAtLeast "..util.LQ(tostring(c.version))
+				end
+				if constraint_str then 
+					cons[#cons+1] = "("..constraint_str..")"
+				end
+
+			end
+			lua_constraints =  "disabled = "..table.concat(cons,' || ')..";"
+		end
         dependencies = dependencies..entry.." "
     end
 
@@ -108,14 +123,15 @@ local function convert_spec2nix(spec, rock_url, rock_file)
   -- try heuristics with nix-locate or manual table ?
   --
   -- what to do with those
-  -- external_deps = " "
-	-- if spec.external_dependencies then
+  	local external_deps = ""
+	if spec.external_dependencies then
   --   for name, ext_files in util.sortedpairs(spec.external_dependencies)
 	  -- do
   --     local name = name:lower()
 		-- external_deps = external_deps..(name)..".dev "
 	  -- end
-	-- end
+	  external_deps = "# override to account for external deps"
+	end
 
     -- the good thing is zat nix-prefetch-zip caches downloads in the store
     -- todo check constraints to choose the correct version of lua
@@ -128,6 +144,7 @@ local function convert_spec2nix(spec, rock_url, rock_file)
    -- we could try to map the luarocks licence to nixpkgs license
    -- see convert2nixLicense or/and hope for this https://github.com/luarocks/luarocks/issues/762
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
+   -- ]]..external_deps..[[
     local header = convert_pkg_name_to_nix(spec.name)..[[ = buildLuaPackage rec {
   pname = ]]..util.LQ(spec.name)..[[;
   version = ]]..util.LQ(spec.version)..[[;
@@ -136,10 +153,9 @@ local function convert_spec2nix(spec, rock_url, rock_file)
     url    = ]]..rock_url..[[;
     sha256 = ]]..util.LQ(checksum)..[[;
   };
-]]
+  ]]..lua_constraints..[[
 
 
-  header = header..[[
   propagatedBuildInputs = []]..dependencies..[[
   ];
 
