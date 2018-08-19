@@ -14,8 +14,8 @@ local util = require("luarocks.util")
 local fetch = require("luarocks.fetch")
 local search = require("luarocks.search")
 local deps = require("luarocks.deps")
-local vers = require("luarocks.vers")
 local cfg = require("luarocks.core.cfg")
+local queries = require("luarocks.queries")
 
 
 nix.help_summary = "Build/compile a rock."
@@ -180,13 +180,11 @@ end
 function load_rock_from_name (name, version)
     local search = require("luarocks.search")
 
-    local query = search.make_query(name, version)
-    -- arch can be "src" or "rockspec"
-    -- query.arch = "rockspec"
-    query.arch = "src"
+    local query = queries.new(name, version, nil, "src" )
     local url, search_err = search.find_suitable_rock(query)
     if not url then
         util.printerr("can't find suitable rock "..name)
+        -- util.printerr(search_err)
         return false, search_err
     end
 
