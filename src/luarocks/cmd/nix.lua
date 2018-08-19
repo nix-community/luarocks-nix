@@ -186,7 +186,7 @@ function load_rock_from_name (name, version)
     query.arch = "src"
     local url, search_err = search.find_suitable_rock(query)
     if not url then
-        util.printerr("can't find suitable rock " )
+        util.printerr("can't find suitable rock "..name)
         return false, search_err
     end
 
@@ -273,11 +273,12 @@ function nix.command(flags, name, version)
     end
 
     -- print("Loading ", rockpsec_name)
-    spec, rock_url, rock_file = load_rock_from_name (rockspec_name, rockspec_version)
+    spec, res1, rock_file = load_rock_from_name (rockspec_name, rockspec_version)
 
     if not spec then
-        return false, "failed to load rock from name"
+        return false, res1
     end
+	local rock_url = res1
 
 	-- not needed in principle
 	-- print("rock version= ", spec.version, " to compare with", rockspec_version)
