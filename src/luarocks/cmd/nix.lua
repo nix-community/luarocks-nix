@@ -114,7 +114,10 @@ local function convert_spec2nix(spec, rock_url, rock_file)
 				end
 
 			end
-			lua_constraints =  "disabled = "..table.concat(cons,' || ')..";"
+
+         if #cons > 0 then
+            lua_constraints =  "disabled = "..table.concat(cons,' || ')..";"
+         end
 		end
         dependencies = dependencies..entry.." "
     end
