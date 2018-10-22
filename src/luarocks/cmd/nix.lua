@@ -75,6 +75,25 @@ local function convert_rockspec2nix(name)
     spec, err, ret = fetch.load_rockspec(name)
 end
 
+
+-- local function rock2src(spec)
+-- end
+
+local function rockspec2src(spec)
+
+-- https://github.com/luarocks/luarocks/wiki/Rockspec-format
+   -- the good thing is zat nix-prefetch-zip caches downloads in the store
+   -- todo check constraints to choose the correct version of lua
+   -- local src = get_src(spec, url)
+   local checksum = get_checksum(rock_file or rock_url)
+   -- local checksum = "0x000"
+  src = [[ (fetchurl {
+    url    = ]]..rock_url..[[;
+    sha256 = ]]..util.LQ(checksum)..[[;
+  }) ]]
+  return src
+end
+
 -- TODO take into account external_dependencies !!
 -- @param spec table
 -- @param rock_url
@@ -91,7 +110,7 @@ local function convert_spec2nix(spec, rock_url, rock_file)
     -- so we havebuildLuaPackage defined in
     local dependencies = ""
     local external_deps = ""
-	local lua_constraints = ""
+    local lua_constraints = ""
     for id, dep in ipairs(spec.dependencies)
     do
 		local entry = convert_pkg_name_to_nix(dep.name)
@@ -136,26 +155,30 @@ local function convert_spec2nix(spec, rock_url, rock_file)
 	  external_deps = "# override to account for external deps"
 	end
 
-    -- the good thing is zat nix-prefetch-zip caches downloads in the store
-    -- todo check constraints to choose the correct version of lua
-    -- local src = get_src(spec, url)
-    local checksum = get_checksum(rock_file or rock_url)
-    -- local checksum = "0x000"
 
+    -- TODO write a generate sources here
+    -- if only a rockspec than translate the way to fetch the sources
+    -- srcs = [ (spec.source.url
    -- see https://stackoverflow.com/questions/1405583/concatenation-of-strings-in-lua for the best method to concat strings
    -- nixpkgs accept empty/inplace license see
    -- we could try to map the luarocks licence to nixpkgs license
    -- see convert2nixLicense or/and hope for this https://github.com/luarocks/luarocks/issues/762
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
    -- ]]..external_deps..[[
-    local header = convert_pkg_name_to_nix(spec.name)..[[ = buildLuaPackage rec {
-  pname = ]]..util.LQ(spec.name)..[[;
-  version = ]]..util.LQ(spec.version)..[[;
+   -- maybe we should have
+   -- get rid of the rec ?
 
+   sources = 
   src = fetchurl {
     url    = ]]..rock_url..[[;
     sha256 = ]]..util.LQ(checksum)..[[;
   };
+
+    local header = convert_pkg_name_to_nix(spec.name)..[[ = buildLuaPackage rec {
+  pname = ]]..util.LQ(spec.name)..[[;
+  version = ]]..util.LQ(spec.version)..[[;
+
+  ]]..sources..[[
   ]]..lua_constraints..[[
 
 
