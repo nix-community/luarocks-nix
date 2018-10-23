@@ -90,10 +90,10 @@ local function url2src(url)
    -- or rock_url
    local checksum = get_checksum(url)
    -- local checksum = "0x000"
-  src = [[ (fetchurl {
+  src = [[ fetchurl {
     url    = ]]..url..[[;
     sha256 = ]]..util.LQ(checksum)..[[;
-  })]]
+  }]]
   return src
 end
 
@@ -104,7 +104,7 @@ end
 -- }
 
 local function convert_specsource2nix(spec)
-   print("spec.source", spec.source.url)
+   -- print("spec.source", spec.source.url)
    assert(type(spec.source.url) == "string")
    -- spec.source.url:gmatch(".*github*")
    return url2src(spec.source.url)
@@ -197,11 +197,15 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
   -- };
   local sources = ""
   if rock_url then
-      sources = url2src(rock_url)
+      sources = "src = "..url2src(rock_url)..";"
   elseif rockspec_url then
-      sources = url2src(rockspec_url)
+     sources = [[
+     srcs = [
+        (]]..url2src(rockspec_url)..[[)
+        (]]..convert_specsource2nix(spec)..[[)
+     ]; ]]
       -- TODO convert spec.source to something we can fetch
-      sources = sources..(convert_specsource2nix(spec) )
+      -- sources = sources..(convert_specsource2nix(spec) )
   else
      -- utils.printerr()
      return nil, "Either rockspec_url or rock_url must be set"
@@ -213,9 +217,7 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
   pname = ]]..util.LQ(spec.name)..[[;
   version = ]]..util.LQ(spec.version)..[[;
 
-  srcs = [
-     ]]..sources..[[
-  ];
+   ]]..sources..[[
 
   ]]..lua_constraints..[[
 
@@ -316,7 +318,6 @@ function nix.command(flags, name, version)
 		-- -- test mode
 		-- local derivation, err = convert_spec2nix(spec, "")
 		-- if derivation then
-		-- 	print(derivation)
 		-- end
 		-- return true
     else
@@ -324,10 +325,8 @@ function nix.command(flags, name, version)
         rockspec_version = version
     end
 
-    print("Loading ", rockspec_name)
     url, res1 = run_query (rockspec_name, rockspec_version)
 
-    print("url ", url)
 
     if not url then
         return false, res1
@@ -339,7 +338,7 @@ function nix.command(flags, name, version)
    --
 	local rock_url = nil
 	local rockspec_url = nil
-
+   local rockspec_file = nil
 	local fetched_file = res1
     if url:match(".*%.rock$")  then
 
@@ -353,7 +352,7 @@ function nix.command(flags, name, version)
          util.printerr("can't fetch and unpack "..name)
          return nil, err, errcode
       end
-      local rockspec_file = path.rockspec_name_from_rock(rock_file)
+      rockspec_file = path.rockspec_name_from_rock(fetched_file)
       rockspec_file = dir_name.."/"..rockspec_file
    else 
       -- it's a rockspec
@@ -368,7 +367,6 @@ function nix.command(flags, name, version)
       -- end
    end
 
-		print("fetching..")
 
     -- util.printerr("loading ",  rockspec_file)
     spec, err = fetch.load_local_rockspec(rockspec_file, nil)
