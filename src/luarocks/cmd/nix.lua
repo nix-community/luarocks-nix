@@ -145,7 +145,7 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
 				if c.op == ">=" then
 					constraint_str = " luaOlder "..util.LQ(tostring(c.version))
 				elseif c.op == "==" then
-					constraint_str = " lua.majorVersion != "..util.LQ(tostring(c.version))
+					constraint_str = " lua.luaversion != "..util.LQ(tostring(c.version))
 				elseif c.op == ">" then
 					constraint_str = " luaOlder "..util.LQ(tostring(c.version))
 				elseif c.op == "<" then
