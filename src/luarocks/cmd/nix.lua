@@ -213,7 +213,7 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
 
 
   -- should be able to do without 'rec' 
-    local header = convert_pkg_name_to_nix(spec.name)..[[ = buildLuaPackage {
+    local header = convert_pkg_name_to_nix(spec.name)..[[ = buildLuarocksPackage {
   pname = ]]..util.LQ(spec.name)..[[;
   version = ]]..util.LQ(spec.version)..[[;
 
