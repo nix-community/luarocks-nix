@@ -4,7 +4,7 @@
 with import <nixpkgs> {};
 
 let
-  luaEnv = lua5_2.withPackages( ps: [ ps.luarocks-nix ] );
+  # luaEnv = lua5_2.withPackages( ps: [ ps.luarocks-nix ] );
   luarocksLocalCopy = "$PWD";
 in
 luarocks-nix.overrideAttrs (oa: {

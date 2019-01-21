@@ -52,7 +52,6 @@ function get_checksum(url)
     local fetch_method = nil
     local r = io.popen(command)
     checksum = r:read()
-    -- local attrSet = {url=(url), sha256=(checksum)}
 
     return checksum
 end
@@ -80,20 +79,59 @@ end
 -- local function rock2src(spec)
 -- end
 
-local function url2src(url)
+local function gen_src_from_basic_url(url)
    assert(type(url) == "string")
+   rockspec.source.file = rockspec.source.file or dir.base_name(rockspec.source.url)
+   local checksum = get_basic_checksum(url)
+      -- local checksum = "0x000"
+   local src = [[ fetchurl {
+      url    = ]]..url..[[;
+      sha256 = ]]..util.LQ(checksum)..[[;
+   }]]
+   return src
+
+end
+
+local function gen_src_from_git_url(url)
+
+   -- deal with  git://github.com/antirez/lua-cmsgpack.git for instance
+   cmd = "nix-prefetch-git --quiet "..url
+
+   local r = io.popen(command)
+   local generated_attr = r:read()
+   src = [[ builtins.fetchGit ]].. generated_attr .. [[ ; ]]
+
+   return src
+end
+
+local function url2src(rockspec)
+   -- assert(type(url) == "string")
+
+   local url = rockspec.source.url
+   local src = ""
+
+   -- logic inspired from rockspecs.from_persisted_table
+   local protocol, pathname = dir.split_url(url)
+   -- rockspec.source.protocol, rockspec.source.pathname = protocol, pathname
+   if dir.is_basic_protocol(protocol) then
+      return gen_src_from_basic_url(url)
+   end
+
+   if protocol == "git" then
+      return gen_src_from_git_url(url)
+   end
+
+   assert(false) -- unsupported protocol
+   -- Temporary compatibility
+   -- if rockspec.source.cvs_module then rockspec.source.module = rockspec.source.cvs_module end
+   -- if rockspec.source.cvs_tag then rockspec.source.tag = rockspec.source.cvs_tag end
+
 
 -- https://github.com/luarocks/luarocks/wiki/Rockspec-format
    -- the good thing is zat nix-prefetch-zip caches downloads in the store
    -- todo check constraints to choose the correct version of lua
    -- local src = get_src(spec, url)
    -- or rock_url
-   local checksum = get_checksum(url)
-   -- local checksum = "0x000"
-  src = [[ fetchurl {
-    url    = ]]..url..[[;
-    sha256 = ]]..util.LQ(checksum)..[[;
-  }]]
   return src
 end
 
@@ -107,7 +145,7 @@ local function convert_specsource2nix(spec)
    -- print("spec.source", spec.source.url)
    assert(type(spec.source.url) == "string")
    -- spec.source.url:gmatch(".*github*")
-   return url2src(spec.source.url)
+   return url2src(spec)
    -- return "fetchFromGitHub {
    -- }"
 end
@@ -197,19 +235,31 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
   -- };
   local sources = ""
   if rock_url then
-      sources = "src = "..url2src(rock_url)..";"
+      sources = "src = "..gen_src_from_basic_url(rock_url)..";"
   elseif rockspec_url then
+     -- sources = [[
+     -- srcs = [
+     --    (]]..url2src(rockspec_url)..[[)
+     --    (]]..convert_specsource2nix(spec)..[[)
+     -- ]; ]]
+
+     -- TODO might nbe a pb here
      sources = [[
-     srcs = [
-        (]]..url2src(rockspec_url)..[[)
-        (]]..convert_specsource2nix(spec)..[[)
-     ]; ]]
-      -- TODO convert spec.source to something we can fetch
-      -- sources = sources..(convert_specsource2nix(spec) )
+      rockspecFilename = (]]..url2src(spec)..[[).outPath;
+
+      src = ]].. convert_specsource2nix(spec) ..[[;
+      ]]
   else
      -- utils.printerr()
      return nil, "Either rockspec_url or rock_url must be set"
   end
+
+  local propagatedBuildInputs = ""
+  if #dependencies > 0 then 
+     propagatedBuildInputs = [[ 
+      []]..dependencies..[[
+     ];]]
+   end
 
 
   -- should be able to do without 'rec' 
@@ -221,8 +271,7 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
 
   ]]..lua_constraints..[[
 
-  propagatedBuildInputs = []]..dependencies..[[
-  ];
+  ]]..propagatedBuildInputs..[[
 
   buildType=]]..util.LQ(spec.build.type)..[[;
 
