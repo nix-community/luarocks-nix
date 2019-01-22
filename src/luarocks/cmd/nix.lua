@@ -54,6 +54,7 @@ function get_basic_checksum(url)
     local checksum = nil
     local fetch_method = nil
     local r = io.popen(command)
+    -- "*a"
     checksum = r:read()
 
     return checksum
@@ -99,11 +100,14 @@ local function gen_src_from_git_url(url)
    -- spec.source.url:gmatch(".*github*")
 
    -- deal with  git://github.com/antirez/lua-cmsgpack.git for instance
-   cmd = "nix-prefetch-git --quiet "..url
+   -- --fetch-submodules
+   cmd = "nix-prefetch-git --fetch-submodules --quiet "..url
 
-   local r = io.popen(command)
-   local generated_attr = r:read()
-   src = [[ builtins.fetchGit ]].. generated_attr .. [[ ; ]]
+   local r = io.popen(cmd)
+   local generated_attr = r:read("*a")
+   -- print ( "generated_attr")
+   -- print ( generated_attr)
+   src = [[ fetchgit ( removeAttrs (builtins.fromJSON '']].. generated_attr .. [[ '') ["date"]) ]]
 
    return src
 end
