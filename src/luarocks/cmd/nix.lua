@@ -16,11 +16,14 @@ local search = require("luarocks.search")
 local deps = require("luarocks.deps")
 local cfg = require("luarocks.core.cfg")
 local queries = require("luarocks.queries")
+local dir = require("luarocks.dir")
 
 
 nix.help_summary = "Build/compile a rock."
 nix.help_arguments = " {<rockspec>|<rock>|<name> [<version>]}"
 nix.help = [[
+Generates a nix package from luarocks package.
+
 Just set the package name
 ]]..util.deps_mode_help()
 
@@ -42,7 +45,7 @@ local function convert2nixLicense(spec)
 end
 
 
-function get_checksum(url)
+function get_basic_checksum(url)
     -- TODO download the src.rock unpack it and get the hash around it ?
     local prefetch_url_program = "nix-prefetch-url"
     -- add --unpack flag to be able to use the resulet with fetchFromGithub and co ?
@@ -81,7 +84,6 @@ end
 
 local function gen_src_from_basic_url(url)
    assert(type(url) == "string")
-   rockspec.source.file = rockspec.source.file or dir.base_name(rockspec.source.url)
    local checksum = get_basic_checksum(url)
       -- local checksum = "0x000"
    local src = [[ fetchurl {
@@ -93,6 +95,8 @@ local function gen_src_from_basic_url(url)
 end
 
 local function gen_src_from_git_url(url)
+   -- TODO generate fetchFromGithub etc.
+   -- spec.source.url:gmatch(".*github*")
 
    -- deal with  git://github.com/antirez/lua-cmsgpack.git for instance
    cmd = "nix-prefetch-git --quiet "..url
@@ -104,11 +108,12 @@ local function gen_src_from_git_url(url)
    return src
 end
 
-local function url2src(rockspec)
+local function url2src(url)
    -- assert(type(url) == "string")
 
-   local url = rockspec.source.url
+   -- local url = rockspec.source.url
    local src = ""
+   -- rockspec.source.file = rockspec.source.file or dir.base_name(rockspec.source.url)
 
    -- logic inspired from rockspecs.from_persisted_table
    local protocol, pathname = dir.split_url(url)
@@ -136,23 +141,11 @@ local function url2src(rockspec)
 end
 
 
--- example for libuv
--- source = {
---   url = 'https://github.com/luvit/luv/releases/download/'..version..'/luv-'..version..'.tar.gz'
--- }
-
 local function convert_specsource2nix(spec)
-   -- print("spec.source", spec.source.url)
    assert(type(spec.source.url) == "string")
-   -- spec.source.url:gmatch(".*github*")
-   return url2src(spec)
-   -- return "fetchFromGitHub {
-   -- }"
+   return url2src(spec.source.url)
 end
 
--- source = {
---   url = 'git://github.com/luvit/luv.git'
--- }
 
 
 -- TODO take into account external_dependencies !!
@@ -244,11 +237,10 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
      -- ]; ]]
 
      -- TODO might nbe a pb here
-     sources = [[
-      rockspecFilename = (]]..url2src(spec)..[[).outPath;
+     sources = [[knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
 
-      src = ]].. convert_specsource2nix(spec) ..[[;
-      ]]
+   src = ]].. convert_specsource2nix(spec) ..[[;
+   ]]
   else
      -- utils.printerr()
      return nil, "Either rockspec_url or rock_url must be set"
@@ -256,9 +248,7 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
 
   local propagatedBuildInputs = ""
   if #dependencies > 0 then 
-     propagatedBuildInputs = [[ 
-      []]..dependencies..[[
-     ];]]
+     propagatedBuildInputs = "propagatedBuildInputs = ["..dependencies.." ];"
    end
 
 
@@ -267,7 +257,7 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
   pname = ]]..util.LQ(spec.name)..[[;
   version = ]]..util.LQ(spec.version)..[[;
 
-   ]]..sources..[[
+  ]]..sources..[[
 
   ]]..lua_constraints..[[
 
