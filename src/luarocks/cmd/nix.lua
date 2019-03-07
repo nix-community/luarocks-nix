@@ -64,10 +64,10 @@ end
 local function gen_src_from_basic_url(url)
    assert(type(url) == "string")
    local checksum = get_basic_checksum(url)
-   local src = [[ fetchurl {
+   local src = [[fetchurl {
       url    = ]]..url..[[;
       sha256 = ]]..util.LQ(checksum)..[[;
-   }]]
+  }]]
    return src
 
 end
@@ -79,7 +79,7 @@ local function gen_src_from_git_url(url)
 
    local r = io.popen(cmd)
    local generated_attr = r:read("*a")
-   src = [[ fetchgit ( removeAttrs (builtins.fromJSON '']].. generated_attr .. [[ '') ["date"]) ]]
+   src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. generated_attr .. [[ '') ["date"]) ]]
 
    return src
 end
@@ -114,10 +114,10 @@ end
 
 -- @param dependencies array of dependencies
 -- @return dependency string and associated constraints
-local function load_dependencies(dependencies)
+local function load_dependencies(deps_array)
    local lua_constraints = ""
    local dependencies = ""
-   for id, dep in ipairs(dependencies)
+   for id, dep in ipairs(deps_array)
    do
       local entry = convert_pkg_name_to_nix(dep.name)
       if entry == "lua" and dep.constraints then
@@ -223,7 +223,7 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
 
     local propagatedBuildInputs = ""
     if #dependencies > 0 then
-       propagatedBuildInputs = "propagatedBuildInputs = ["..dependencies.." ];"
+       propagatedBuildInputs = "propagatedBuildInputs = [ "..dependencies.."];"
     end
 
 
@@ -238,7 +238,7 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
 
   -- should be able to do without 'rec'
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
-    local header = [[ buildLuarocksPackage {
+    local header = [[buildLuarocksPackage {
   pname = ]]..util.LQ(spec.name)..[[;
   version = ]]..util.LQ(spec.version)..[[;
 
