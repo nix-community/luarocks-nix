@@ -254,7 +254,7 @@ buildLuarocksPackage {
 
   meta = {
     homepage = ]]..util.LQ(spec.description.homepage or spec.source.url)..[[;
-    description=]]..util.LQ(spec.description.summary)..[[;
+    description = ]]..util.LQ(spec.description.summary)..[[;
     license = {
       fullName = ]]..util.LQ(spec.description.license)..[[;
     };
