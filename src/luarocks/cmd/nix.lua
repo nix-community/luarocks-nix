@@ -214,7 +214,7 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
 
        -- TODO might nbe a pb here
        sources = [[
-  knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
+knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
 
   src = ]].. convert_specsource2nix(spec) ..[[;
 ]]
