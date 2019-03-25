@@ -65,8 +65,8 @@ local function gen_src_from_basic_url(url)
    assert(type(url) == "string")
    local checksum = get_basic_checksum(url)
    local src = [[fetchurl {
-      url    = ]]..url..[[;
-      sha256 = ]]..util.LQ(checksum)..[[;
+    url    = ]]..url..[[;
+    sha256 = ]]..util.LQ(checksum)..[[;
   }]]
    return src
 
@@ -213,10 +213,10 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
 
        -- TODO might nbe a pb here
        sources = [[
-       knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
+  knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
 
-       src = ]].. convert_specsource2nix(spec) ..[[;
-       ]]
+  src = ]].. convert_specsource2nix(spec) ..[[;
+]]
     else
        return nil, "Either rockspec_url or rock_url must be set"
     end
