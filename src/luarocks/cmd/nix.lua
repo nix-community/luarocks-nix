@@ -24,6 +24,7 @@ local dir = require("luarocks.dir")
 nix.help_summary = "Build/compile a rock."
 nix.help_arguments = " {<rockspec>|<rock>|<name> [<version>]}"
 nix.help = [[
+
 Generates a nix package from luarocks package.
 
 Just set the package name
@@ -227,7 +228,7 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
     end
 
 
-    local checkInputs = ""
+    --local checkInputs = ""
     -- local checkInputsConstraints = ""
     -- checkInputs, checkInputsConstraints = build_dependencies(spec.test_dependencies)
     --
@@ -238,7 +239,8 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
 
   -- should be able to do without 'rec'
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
-    local header = [[buildLuarocksPackage {
+    local header = [[
+buildLuarocksPackage {
   pname = ]]..util.LQ(spec.name)..[[;
   version = ]]..util.LQ(spec.version)..[[;
 
@@ -247,7 +249,6 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
   ]]..lua_constraints..[[
 
   ]]..propagatedBuildInputs..[[
-  ]]..checkInputs..[[
 
   buildType = ]]..util.LQ(spec.build.type)..[[;
 
