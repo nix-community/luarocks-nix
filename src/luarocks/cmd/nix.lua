@@ -136,7 +136,7 @@ local function load_dependencies(deps_array)
                constraint_str = " luaAtLeast "..util.LQ(tostring(c.version))
             end
             if constraint_str then
-               cons[#cons+1] = "("..constraint_str..")"
+               cons[#cons+1] = "("..constraint_str.." )"
             end
 
          end
