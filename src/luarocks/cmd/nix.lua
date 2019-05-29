@@ -31,6 +31,13 @@ Just set the package name
 ]]..util.deps_mode_help()
 
 
+-- look at how it's done in fs.lua
+local function debug(msg)
+   if cfg.verbose then
+      print("nix:"..msg)
+   end
+end
+
 -- attempts to convert spec.description.license
 -- to nix lib/licenses.nix
 local function convert2nixLicense(spec)
@@ -78,9 +85,12 @@ local function gen_src_from_git_url(url)
    -- deal with  git://github.com/antirez/lua-cmsgpack.git for instance
    cmd = "nix-prefetch-git --fetch-submodules --quiet "..url
 
-   local r = io.popen(cmd)
-   local generated_attr = r:read("*a")
-   src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. generated_attr .. [[ '') ["date"]) ]]
+   debug(cmd)
+   local generatedSrc= util.popen_read(cmd, "*a")
+   if generatedSrc and generatedSrc == "" then
+      utils.printerr("Call to "..cmd.." failed")
+   end
+   src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. generatedSrc .. [[ '') ["date"]) ]]
 
    return src
 end
@@ -230,14 +240,15 @@ knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
 
     --local checkInputs = ""
     -- local checkInputsConstraints = ""
-    -- checkInputs, checkInputsConstraints = build_dependencies(spec.test_dependencies)
-    --
-    -- introduced in rockspec format 3
-    -- if #dependencies > 0 then
-    --    propagatedBuildInputs = "checkInputs = ["..dependencies.." ];"
-    -- end
+     checkInputs, checkInputsConstraints = load_dependencies(spec.test_dependencies)
 
-  -- should be able to do without 'rec'
+     -- introduced in rockspec format 3
+     local checkInputsStr = ""
+     if #checkInputs > 0 then
+        checkInputsStr = "checkInputs = [ "..checkInputs.."];"
+     end
+
+   -- should be able to do without 'rec'
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
     local header = [[
 buildLuarocksPackage {
@@ -250,11 +261,11 @@ buildLuarocksPackage {
 
   ]]..propagatedBuildInputs..[[
 
-  buildType = ]]..util.LQ(spec.build.type)..[[;
+  ]]..checkInputsStr..[[
 
   meta = {
     homepage = ]]..util.LQ(spec.description.homepage or spec.source.url)..[[;
-    description = ]]..util.LQ(spec.description.summary)..[[;
+    description = ]]..util.LQ(spec.description.summary or "No summary")..[[;
     license = {
       fullName = ]]..util.LQ(spec.description.license)..[[;
     };
@@ -276,16 +287,15 @@ function run_query (name, version)
     local url, search_err = search.find_suitable_rock(query)
     if not url then
         util.printerr("can't find suitable rock "..name)
-        -- util.printerr(search_err)
         return nil, search_err
     end
-   util.printerr('found url '..url)
+    debug('found url '..url)
 
-   -- local rockspec_file = "unset path"
-   local fetched_file, tmp_dirname, errcode = fetch.fetch_url_at_temp_dir(url, "luarocks-"..name)
-   if not fetched_file then
-      return nil, "Could not fetch file: " .. tmp_dirname, errcode
-   end
+    -- local rockspec_file = "unset path"
+    local fetched_file, tmp_dirname, errcode = fetch.fetch_url_at_temp_dir(url, "luarocks-"..name)
+    if not fetched_file then
+       return nil, "Could not fetch file: " .. tmp_dirname, errcode
+    end
 
     return url, fetched_file
 end
@@ -354,7 +364,7 @@ function nix.command(flags, name, version)
 	local rockspec_url = nil
    local rockspec_file = nil
 	local fetched_file = res1
-    if url:match(".*%.rock$")  then
+   if url:match(".*%.rock$")  then
 
       rock_url = url
 
