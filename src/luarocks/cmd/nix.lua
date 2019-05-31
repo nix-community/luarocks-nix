@@ -98,7 +98,6 @@ end
 -- converts url to nix "src"
 -- while waiting for a program capable to generate the nix code for us
 local function url2src(url)
-   -- assert(type(url) == "string")
 
    local src = ""
 
@@ -173,31 +172,31 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
     local lua_constraints = ""
     -- for id, dep in ipairs(spec.dependencies)
     -- do
-		-- local entry = convert_pkg_name_to_nix(dep.name)
-		-- if entry == "lua" and dep.constraints then
-			-- local cons = {}
-			-- for _, c in ipairs(dep.constraints)
-			-- do
-				-- local constraint_str = nil
-				-- if c.op == ">=" then
-					-- constraint_str = " luaOlder "..util.LQ(tostring(c.version))
-				-- elseif c.op == "==" then
-					-- constraint_str = " lua.luaversion != "..util.LQ(tostring(c.version))
-				-- elseif c.op == ">" then
-					-- constraint_str = " luaOlder "..util.LQ(tostring(c.version))
-				-- elseif c.op == "<" then
-					-- constraint_str = " luaAtLeast "..util.LQ(tostring(c.version))
-				-- end
-				-- if constraint_str then
-					-- cons[#cons+1] = "("..constraint_str..")"
-				-- end
+      -- local entry = convert_pkg_name_to_nix(dep.name)
+      -- if entry == "lua" and dep.constraints then
+         -- local cons = {}
+         -- for _, c in ipairs(dep.constraints)
+         -- do
+            -- local constraint_str = nil
+            -- if c.op == ">=" then
+               -- constraint_str = " luaOlder "..util.LQ(tostring(c.version))
+            -- elseif c.op == "==" then
+               -- constraint_str = " lua.luaversion != "..util.LQ(tostring(c.version))
+            -- elseif c.op == ">" then
+               -- constraint_str = " luaOlder "..util.LQ(tostring(c.version))
+            -- elseif c.op == "<" then
+               -- constraint_str = " luaAtLeast "..util.LQ(tostring(c.version))
+            -- end
+            -- if constraint_str then
+               -- cons[#cons+1] = "("..constraint_str..")"
+            -- end
 
-			-- end
+         -- end
 
     --      if #cons > 0 then
     --         lua_constraints =  "disabled = "..table.concat(cons,' || ')..";"
     --      end
-		-- end
+      -- end
     --     dependencies = dependencies..entry.." "
     -- end
 
@@ -234,7 +233,7 @@ knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
 
     local propagatedBuildInputs = ""
     if #dependencies > 0 then
-       propagatedBuildInputs = "propagatedBuildInputs = [ "..dependencies.."];"
+       propagatedBuildInputs = "  propagatedBuildInputs = [ "..dependencies.."];"
     end
 
 
@@ -245,7 +244,7 @@ knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
      -- introduced in rockspec format 3
      local checkInputsStr = ""
      if #checkInputs > 0 then
-        checkInputsStr = "checkInputs = [ "..checkInputs.."];"
+        checkInputsStr = "  checkInputs = [ "..checkInputs.."];"
      end
 
    -- should be able to do without 'rec'
@@ -257,11 +256,11 @@ buildLuarocksPackage {
 
   ]]..sources..[[
 
-  ]]..lua_constraints..[[
+]]..lua_constraints..[[
 
-  ]]..propagatedBuildInputs..[[
+]]..propagatedBuildInputs..[[
 
-  ]]..checkInputsStr..[[
+]]..checkInputsStr..[[
 
   meta = {
     homepage = ]]..util.LQ(spec.description.homepage or spec.source.url)..[[;
@@ -360,10 +359,10 @@ function nix.command(flags, name, version)
 
    -- if a rock is available
    -- res1 being the url
-	local rock_url = nil
-	local rockspec_url = nil
+   local rock_url = nil
+   local rockspec_url = nil
    local rockspec_file = nil
-	local fetched_file = res1
+   local fetched_file = res1
    if url:match(".*%.rock$")  then
 
       rock_url = url
@@ -382,8 +381,6 @@ function nix.command(flags, name, version)
       rockspec_url = url
    end
 
-
-    -- util.printerr("loading ",  rockspec_file)
     spec, err = fetch.load_local_rockspec(rockspec_file, nil)
     if not spec then
         return nil, err
@@ -391,9 +388,9 @@ function nix.command(flags, name, version)
 
 
     local derivation, err = convert_spec2nix(spec, rockspec_url, rock_url)
-	if derivation then
-		print(derivation)
-	end
+   if derivation then
+      print(derivation)
+   end
     return derivation, err
 end
 
