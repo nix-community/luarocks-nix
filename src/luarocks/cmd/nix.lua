@@ -125,38 +125,36 @@ end
 -- @param dependencies array of dependencies
 -- @return dependency string and associated constraints
 local function load_dependencies(deps_array)
-   local lua_constraints = ""
+   -- local lua_constraints = ""
    local dependencies = ""
+   local cons = {}
+   -- local lua_constraints = cons
+
    for id, dep in ipairs(deps_array)
    do
       local entry = convert_pkg_name_to_nix(dep.name)
       if entry == "lua" and dep.constraints then
-         local cons = {}
          for _, c in ipairs(dep.constraints)
          do
             local constraint_str = nil
             if c.op == ">=" then
-               constraint_str = " luaOlder "..util.LQ(tostring(c.version))
+               constraint_str = "luaOlder "..util.LQ(tostring(c.version))
             elseif c.op == "==" then
-               constraint_str = " lua.luaversion != "..util.LQ(tostring(c.version))
+               constraint_str = "lua.luaversion != "..util.LQ(tostring(c.version))
             elseif c.op == ">" then
-               constraint_str = " luaOlder "..util.LQ(tostring(c.version))
+               constraint_str = "luaOlder "..util.LQ(tostring(c.version))
             elseif c.op == "<" then
-               constraint_str = " luaAtLeast "..util.LQ(tostring(c.version))
+               constraint_str = "luaAtLeast "..util.LQ(tostring(c.version))
             end
             if constraint_str then
-               cons[#cons+1] = "("..constraint_str.." )"
+               cons[#cons+1] = "("..constraint_str..")"
             end
 
-         end
-
-         if #cons > 0 then
-            lua_constraints =  "disabled = "..table.concat(cons,' || ')..";"
          end
       end
       dependencies = dependencies..entry.." "
    end
-   return dependencies, lua_constraints
+   return dependencies, cons
 end
 
 -- TODO take into account external_dependencies
@@ -169,36 +167,8 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
 
 
     local dependencies = ""
-    local lua_constraints = ""
-    -- for id, dep in ipairs(spec.dependencies)
-    -- do
-      -- local entry = convert_pkg_name_to_nix(dep.name)
-      -- if entry == "lua" and dep.constraints then
-         -- local cons = {}
-         -- for _, c in ipairs(dep.constraints)
-         -- do
-            -- local constraint_str = nil
-            -- if c.op == ">=" then
-               -- constraint_str = " luaOlder "..util.LQ(tostring(c.version))
-            -- elseif c.op == "==" then
-               -- constraint_str = " lua.luaversion != "..util.LQ(tostring(c.version))
-            -- elseif c.op == ">" then
-               -- constraint_str = " luaOlder "..util.LQ(tostring(c.version))
-            -- elseif c.op == "<" then
-               -- constraint_str = " luaAtLeast "..util.LQ(tostring(c.version))
-            -- end
-            -- if constraint_str then
-               -- cons[#cons+1] = "("..constraint_str..")"
-            -- end
-
-         -- end
-
-    --      if #cons > 0 then
-    --         lua_constraints =  "disabled = "..table.concat(cons,' || ')..";"
-    --      end
-      -- end
-    --     dependencies = dependencies..entry.." "
-    -- end
+    local lua_constraints = {}
+    local lua_constraints_str = ""
 
     dependencies, lua_constraints = load_dependencies(spec.dependencies)
     -- TODO to map lua dependencies to nix ones,
@@ -214,6 +184,10 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
     end
 
 
+    if #lua_constraints > 0 then
+       lua_constraints_str =  "  disabled = "..table.concat(lua_constraints,' || ')..";\n"
+    end
+
     -- TODO write a generate sources here
     -- if only a rockspec than translate the way to fetch the sources
     local sources = ""
@@ -222,8 +196,7 @@ local function convert_spec2nix(spec, rockspec_url, rock_url)
     elseif rockspec_url then
 
        -- TODO might nbe a pb here
-       sources = [[
-knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
+       sources = [[knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
 
   src = ]].. convert_specsource2nix(spec) ..[[;
 ]]
@@ -231,20 +204,17 @@ knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
        return nil, "Either rockspec_url or rock_url must be set"
     end
 
-    local propagatedBuildInputs = ""
+    local propagated_build_inputs_str = ""
     if #dependencies > 0 then
-       propagatedBuildInputs = "  propagatedBuildInputs = [ "..dependencies.."];"
+       propagated_build_inputs_str = "  propagatedBuildInputs = [ "..dependencies.."];\n"
     end
 
-
-    --local checkInputs = ""
-    -- local checkInputsConstraints = ""
      checkInputs, checkInputsConstraints = load_dependencies(spec.test_dependencies)
 
      -- introduced in rockspec format 3
      local checkInputsStr = ""
      if #checkInputs > 0 then
-        checkInputsStr = "  checkInputs = [ "..checkInputs.."];"
+        checkInputsStr = "  checkInputs = [ "..checkInputs.."];\n"
      end
 
    -- should be able to do without 'rec'
@@ -256,10 +226,8 @@ buildLuarocksPackage {
 
   ]]..sources..[[
 
-]]..lua_constraints..[[
-
-]]..propagatedBuildInputs..[[
-
+]]..lua_constraints_str..[[
+]]..propagated_build_inputs_str..[[
 ]]..checkInputsStr..[[
 
   meta = {
@@ -300,12 +268,12 @@ function run_query (name, version)
 end
 
 -- Converts lua package name to nix package name
--- replaces dot in names with underscores
+-- replaces dot with underscores
 function convert_pkg_name_to_nix(name)
 
-	-- % works as an escape character
-	local res, _ = name:gsub("%.", "_")
-	return res
+   -- % works as an escape character
+   local res, _ = name:gsub("%.", "_")
+   return res
 end
 
 --- Driver function for "nix" command.
@@ -325,10 +293,6 @@ function nix.command(flags, name, version)
     local rockspec_name, rockspec_version
     -- assert(type(version) == "string" or not version)
 
-    -- if name:match("%.rockspec$")
-    --  -- table or (nil, string, [string])
-    --  local res, err = convert_rockspec2nix(name, version)
-    -- else if
     if name:match(".*%.rock$")  then
         local rock_file = name
         local spec, msg = fetch.fetch_and_unpack_rock(rock_file, nil)
@@ -357,8 +321,6 @@ function nix.command(flags, name, version)
         return false, res1
     end
 
-   -- if a rock is available
-   -- res1 being the url
    local rock_url = nil
    local rockspec_url = nil
    local rockspec_file = nil
@@ -388,9 +350,9 @@ function nix.command(flags, name, version)
 
 
     local derivation, err = convert_spec2nix(spec, rockspec_url, rock_url)
-   if derivation then
+    if derivation then
       print(derivation)
-   end
+    end
     return derivation, err
 end
 
