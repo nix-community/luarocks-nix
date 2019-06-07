@@ -7,7 +7,7 @@
 -- this should be converted to an addon
 -- https://github.com/luarocks/luarocks/wiki/Addon-author's-guide
 -- needs at least one json library, for instance luaPackages.cjson
-local nix = {}
+local cmd_nix = {}
 package.loaded["luarocks.nix"] = nix
 
 local pack = require("luarocks.pack")
@@ -21,14 +21,16 @@ local queries = require("luarocks.queries")
 local dir = require("luarocks.dir")
 
 
-nix.help_summary = "Build/compile a rock."
-nix.help_arguments = " {<rockspec>|<rock>|<name> [<version>]}"
-nix.help = [[
-
+cmd_nix.help_summary = "Converts a rock/rockspec to a nix package"
+cmd_nix.help_arguments = "[--maintainers] {<rockspec>|<rock>|<name> [<version>]}"
+cmd_nix.help = [[
 Generates a nix package from luarocks package.
 
 Just set the package name
-]]..util.deps_mode_help()
+
+--maintainers set package meta.maintainers
+]]
+-- ..util.deps_mode_help()
 
 
 -- look at how it's done in fs.lua
@@ -161,7 +163,7 @@ end
 -- @param spec table
 -- @param rock_url
 -- @param rock_file if nil, will be fetched from url
-local function convert_spec2nix(spec, rockspec_url, rock_url)
+local function convert_spec2nix(spec, rockspec_url, rock_url, nix_maintainers)
     assert ( spec )
     assert ( type(rock_url) == "string" or not rock_url )
 
@@ -250,7 +252,8 @@ function run_query (name, version)
 
     -- "src" to fetch only sources
     -- see arch_to_table for, any delimiter will do
-    local query = queries.new(name, version, false, "src rockspec" )
+    local operator = ">"
+    local query = queries.new(name, version, false, "src|rockspec", )
     local url, search_err = search.find_suitable_rock(query)
     if not url then
         util.printerr("can't find suitable rock "..name)
@@ -283,9 +286,10 @@ end
 -- if returned a result, installs the matching rock.
 -- @param version string: When passing a package name, a version number may
 -- also be given.
+-- @param maintainers
 -- @return boolean or (nil, string, exitcode): True if build was successful; nil and an
 -- error message otherwise. exitcode is optionally returned.
-function nix.command(flags, name, version)
+function cmd_nix.command(flags, name, version)
     if type(name) ~= "string" then
         return nil, "Expects package name as first argument. "..util.see_help("nix")
     end
@@ -348,12 +352,11 @@ function nix.command(flags, name, version)
         return nil, err
     end
 
-
-    local derivation, err = convert_spec2nix(spec, rockspec_url, rock_url)
+    local derivation, err = convert_spec2nix(spec, rockspec_url, rock_url, flags["maintainers"])
     if derivation then
       print(derivation)
     end
     return derivation, err
 end
 
-return nix
+return cmd_nix
