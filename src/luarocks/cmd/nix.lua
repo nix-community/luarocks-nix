@@ -8,7 +8,6 @@
 -- https://github.com/luarocks/luarocks/wiki/Addon-author's-guide
 -- needs at least one json library, for instance luaPackages.cjson
 local cmd_nix = {}
-package.loaded["luarocks.nix"] = nix
 
 local pack = require("luarocks.pack")
 local path = require("luarocks.path")
@@ -23,12 +22,14 @@ local dir = require("luarocks.dir")
 
 cmd_nix.help_summary = "Converts a rock/rockspec to a nix package"
 cmd_nix.help_arguments = "[--maintainers] {<rockspec>|<rock>|<name> [<version>]}"
+-- new flags must be added to util.lua
 cmd_nix.help = [[
 Generates a nix package from luarocks package.
 
-Just set the package name
+Just set the package name.
 
 --maintainers set package meta.maintainers
+
 ]]
 -- ..util.deps_mode_help()
 
@@ -159,11 +160,20 @@ local function load_dependencies(deps_array)
    return dependencies, cons
 end
 
+
+-- Converts luarocks to nix platform names
+local function translate_platforms(spec)
+   if spec.supported_platforms then
+      return "    platforms = [];"
+   end
+end
+
 -- TODO take into account external_dependencies
 -- @param spec table
 -- @param rock_url
 -- @param rock_file if nil, will be fetched from url
-local function convert_spec2nix(spec, rockspec_url, rock_url, nix_maintainers)
+-- @param manual_overrides a table of custom nix settings like "maintainers"
+local function convert_spec2nix(spec, rockspec_url, rock_url, manual_overrides)
     assert ( spec )
     assert ( type(rock_url) == "string" or not rock_url )
 
@@ -171,6 +181,17 @@ local function convert_spec2nix(spec, rockspec_url, rock_url, nix_maintainers)
     local dependencies = ""
     local lua_constraints = {}
     local lua_constraints_str = ""
+    local maintainers_str = ""
+    local long_desc_str = ""
+    local platforms_str = ""
+
+    if manual_overrides["maintainers"] then
+       maintainers_str = "    maintainers = with maintainers; [ "..manual_overrides["maintainers"].." ];\n"
+    end
+
+    if spec.detailed then
+       long_desc_str = "    longDescription = ''"..spec.detailed.."'';"
+    end
 
     dependencies, lua_constraints = load_dependencies(spec.dependencies)
     -- TODO to map lua dependencies to nix ones,
@@ -232,9 +253,11 @@ buildLuarocksPackage {
 ]]..propagated_build_inputs_str..[[
 ]]..checkInputsStr..[[
 
-  meta = {
+  meta = with stdenv.lib; {
     homepage = ]]..util.LQ(spec.description.homepage or spec.source.url)..[[;
     description = ]]..util.LQ(spec.description.summary or "No summary")..[[;
+]]..long_desc_str..[[
+]]..maintainers_str..[[
     license = {
       fullName = ]]..util.LQ(spec.description.license)..[[;
     };
@@ -253,7 +276,7 @@ function run_query (name, version)
     -- "src" to fetch only sources
     -- see arch_to_table for, any delimiter will do
     local operator = ">"
-    local query = queries.new(name, version, false, "src|rockspec", )
+    local query = queries.new(name, version, false, "src|rockspec")
     local url, search_err = search.find_suitable_rock(query)
     if not url then
         util.printerr("can't find suitable rock "..name)
@@ -352,7 +375,10 @@ function cmd_nix.command(flags, name, version)
         return nil, err
     end
 
-    local derivation, err = convert_spec2nix(spec, rockspec_url, rock_url, flags["maintainers"])
+    nix_overrides = {
+       maintainers = flags["maintainers"]
+    }
+    local derivation, err = convert_spec2nix(spec, rockspec_url, rock_url, nix_overrides)
     if derivation then
       print(derivation)
     end
