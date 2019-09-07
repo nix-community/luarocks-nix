@@ -38,7 +38,7 @@ Just set the package name.
    cmd:argument("version", "Rock(spec) version.")
       :args("?")
 
-   cmd:flag("--maintainers", "comma separated list of nix maintainers")
+   cmd:option("--maintainers", "comma separated list of nix maintainers")
 end
 
 -- look at how it's done in fs.lua
@@ -90,7 +90,6 @@ local function gen_src_from_basic_url(url)
    local dirname = dir.dir_name(url)
    local standard_repo = false
    for _, repo in ipairs(cfg.rocks_servers) do
-      debug("checking against repo"..repo)
       if repo == dirname then
          local basename = dir.base_name(url)
          final_url = "mirror://luarocks/"..basename
