@@ -7,7 +7,7 @@
 -- this should be converted to an addon
 -- https://github.com/luarocks/luarocks/wiki/Addon-author's-guide
 -- needs at least one json library, for instance luaPackages.cjson
-local cmd_nix = {}
+local nix = {}
 
 local pack = require("luarocks.pack")
 local path = require("luarocks.path")
@@ -20,19 +20,26 @@ local queries = require("luarocks.queries")
 local dir = require("luarocks.dir")
 
 
-cmd_nix.help_summary = "Converts a rock/rockspec to a nix package"
-cmd_nix.help_arguments = "[--maintainers] {<rockspec>|<rock>|<name> [<version>]}"
 -- new flags must be added to util.lua
-cmd_nix.help = [[
+-- ..util.deps_mode_help()
+-- nix.help_arguments = "[--maintainers] {<rockspec>|<rock>|<name> [<version>]}"
+function nix.add_to_parser(parser)
+   local cmd = parser:command("nix", [[
 Generates a nix package from luarocks package.
 
 Just set the package name.
 
 --maintainers set package meta.maintainers
+]], util.see_also())
+   :summary("Converts a rock/rockspec to a nix package")
 
-]]
--- ..util.deps_mode_help()
+   cmd:argument("name", "Rockspec for the rock to build.")
+      :args("?")
+   cmd:argument("version", "Rock(spec) version.")
+      :args("?")
 
+   cmd:flag("--maintainers", "comma separated list of nix maintainers")
+end
 
 -- look at how it's done in fs.lua
 local function debug(msg)
@@ -312,7 +319,11 @@ end
 -- @param maintainers
 -- @return boolean or (nil, string, exitcode): True if build was successful; nil and an
 -- error message otherwise. exitcode is optionally returned.
-function cmd_nix.command(flags, name, version)
+function nix.command(args)
+    local name = args.name
+    local version = args.version
+    local maintainers = args.maintainers
+
     if type(name) ~= "string" then
         return nil, "Expects package name as first argument. "..util.see_help("nix")
     end
@@ -376,7 +387,7 @@ function cmd_nix.command(flags, name, version)
     end
 
     nix_overrides = {
-       maintainers = flags["maintainers"]
+       maintainers = maintainers
     }
     local derivation, err = convert_spec2nix(spec, rockspec_url, rock_url, nix_overrides)
     if derivation then
@@ -385,4 +396,4 @@ function cmd_nix.command(flags, name, version)
     return derivation, err
 end
 
-return cmd_nix
+return nix
