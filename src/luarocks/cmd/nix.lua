@@ -79,17 +79,34 @@ local function convert_rockspec2nix(name)
 end
 
 
+-- Generate nix code using fetchurl
+-- Detects if the server is in the list of possible mirrors
+-- in which case it uses the special nixpkgs uris mirror://luarocks
 local function gen_src_from_basic_url(url)
    assert(type(url) == "string")
    local checksum = get_basic_checksum(url)
+   local final_url = url
+
+   local dirname = dir.dir_name(url)
+   local standard_repo = false
+   for _, repo in ipairs(cfg.rocks_servers) do
+      debug("checking against repo"..repo)
+      if repo == dirname then
+         local basename = dir.base_name(url)
+         final_url = "mirror://luarocks/"..basename
+         break
+      end
+   end
+
    local src = [[fetchurl {
-    url    = ]]..url..[[;
+    url    = ]]..final_url..[[;
     sha256 = ]]..util.LQ(checksum)..[[;
   }]]
    return src
 
 end
 
+-- Generate nix code to fetch from a git repository
 local function gen_src_from_git_url(url)
 
    -- deal with  git://github.com/antirez/lua-cmsgpack.git for instance
@@ -113,12 +130,17 @@ local function url2src(url)
 
    -- logic inspired from rockspecs.from_persisted_table
    local protocol, pathname = dir.split_url(url)
+   debug("Generating src for protocol:"..protocol.." to "..pathname)
    if dir.is_basic_protocol(protocol) then
       return gen_src_from_basic_url(url)
    end
 
    if protocol == "git" then
       return gen_src_from_git_url(url)
+   end
+
+   if protocol == "file" then
+      return pathname
    end
 
    assert(false) -- unsupported protocol
