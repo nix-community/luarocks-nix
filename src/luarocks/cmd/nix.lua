@@ -156,10 +156,8 @@ end
 -- @param dependencies array of dependencies
 -- @return dependency string and associated constraints
 local function load_dependencies(deps_array)
-   -- local lua_constraints = ""
    local dependencies = ""
    local cons = {}
-   -- local lua_constraints = cons
 
    for id, dep in ipairs(deps_array)
    do
@@ -234,19 +232,16 @@ local function convert_spec2nix(spec, rockspec_url, rock_url, manual_overrides)
        external_deps = "# override to account for external deps"
     end
 
-
     if #lua_constraints > 0 then
        lua_constraints_str =  "  disabled = "..table.concat(lua_constraints,' || ')..";\n"
     end
 
-    -- TODO write a generate sources here
     -- if only a rockspec than translate the way to fetch the sources
     local sources = ""
     if rock_url then
        sources = "src = "..gen_src_from_basic_url(rock_url)..";"
     elseif rockspec_url then
 
-       -- TODO might nbe a pb here
        sources = [[knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
 
   src = ]].. convert_specsource2nix(spec) ..[[;
@@ -260,13 +255,22 @@ local function convert_spec2nix(spec, rockspec_url, rock_url, manual_overrides)
        propagated_build_inputs_str = "  propagatedBuildInputs = [ "..dependencies.."];\n"
     end
 
-     checkInputs, checkInputsConstraints = load_dependencies(spec.test_dependencies)
+    checkInputs, checkInputsConstraints = load_dependencies(spec.test_dependencies)
 
-     -- introduced in rockspec format 3
-     local checkInputsStr = ""
-     if #checkInputs > 0 then
-        checkInputsStr = "  checkInputs = [ "..checkInputs.."];\n"
-     end
+    if spec.test and spec.test.type then
+       local test_type = spec.test.type
+       if test_type == "busted" then
+         checkInputs = checkInputs.."busted "
+       end
+    end
+
+
+    -- introduced in rockspec format 3
+    local checkInputsStr = ""
+    if #checkInputs > 0 then
+       checkInputsStr = "  checkInputs = [ "..checkInputs.."];\n"
+       checkInputsStr = checkInputsStr.."  doCheck = true;\n"
+    end
 
    -- should be able to do without 'rec'
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
