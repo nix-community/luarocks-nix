@@ -271,6 +271,10 @@ local function convert_spec2nix(spec, rockspec_url, rock_url, manual_overrides)
        checkInputsStr = "  checkInputs = [ "..checkInputs.."];\n"
        checkInputsStr = checkInputsStr.."  doCheck = true;\n"
     end
+    local license_str = ""
+    if spec.description.license then
+       license_str = [[    license.fullName = ]]..util.LQ(spec.description.license)..";\n"
+   end
 
    -- should be able to do without 'rec'
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
@@ -290,9 +294,7 @@ buildLuarocksPackage {
     description = ]]..util.LQ(spec.description.summary or "No summary")..[[;
 ]]..long_desc_str..[[
 ]]..maintainers_str..[[
-    license = {
-      fullName = ]]..util.LQ(spec.description.license)..[[;
-    };
+]]..license_str..[[
   };
 };
 ]]
