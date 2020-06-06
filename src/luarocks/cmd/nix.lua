@@ -98,7 +98,7 @@ local function gen_src_from_basic_url(url)
    end
 
    local src = [[fetchurl {
-    url    = ]]..final_url..[[;
+    url    = "]]..final_url..[[";
     sha256 = ]]..util.LQ(checksum)..[[;
   }]]
    return src
