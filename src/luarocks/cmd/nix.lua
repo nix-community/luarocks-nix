@@ -9,12 +9,9 @@
 -- needs at least one json library, for instance luaPackages.cjson
 local nix = {}
 
-local pack = require("luarocks.pack")
 local path = require("luarocks.path")
 local util = require("luarocks.util")
 local fetch = require("luarocks.fetch")
-local search = require("luarocks.search")
-local deps = require("luarocks.deps")
 local cfg = require("luarocks.core.cfg")
 local queries = require("luarocks.queries")
 local dir = require("luarocks.dir")
@@ -49,12 +46,10 @@ local function debug(msg)
 end
 
 -- attempts to convert spec.description.license
--- to nix lib/licenses.nix
-local function convert2nixLicense(spec)
-
-    license = {
-      fullName = spec.description.license;
-    };
+-- to spdx id (see <nixpkgs>/lib/licenses.nix)
+local function convert2nixLicense(license)
+   assert (license ~= nil)
+   return util.LQ(license)
 end
 
 
@@ -65,17 +60,11 @@ function get_basic_checksum(url)
 
     local command = prefetch_url_program.." "..(url)
     local checksum = nil
-    local fetch_method = nil
     local r = io.popen(command)
     -- "*a"
     checksum = r:read()
 
     return checksum
-end
-
--- TODO fetch sources/pack it
-local function convert_rockspec2nix(name)
-    spec, err, ret = fetch.load_rockspec(name)
 end
 
 
@@ -88,7 +77,6 @@ local function gen_src_from_basic_url(url)
    local final_url = url
 
    local dirname = dir.dir_name(url)
-   local standard_repo = false
    for _, repo in ipairs(cfg.rocks_servers) do
       if repo == dirname then
          local basename = dir.base_name(url)
@@ -114,9 +102,9 @@ local function gen_src_from_git_url(url)
    debug(cmd)
    local generatedSrc= util.popen_read(cmd, "*a")
    if generatedSrc and generatedSrc == "" then
-      utils.printerr("Call to "..cmd.." failed")
+      util.printerr("Call to "..cmd.." failed")
    end
-   src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. generatedSrc .. [[ '') ["date"]) ]]
+   src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. generatedSrc .. [[ '') ["date" "path"]) ]]
 
    return src
 end
@@ -187,13 +175,6 @@ local function load_dependencies(deps_array)
 end
 
 
--- Converts luarocks to nix platform names
-local function translate_platforms(spec)
-   if spec.supported_platforms then
-      return "    platforms = [];"
-   end
-end
-
 -- TODO take into account external_dependencies
 -- @param spec table
 -- @param rock_url
@@ -209,7 +190,6 @@ local function convert_spec2nix(spec, rockspec_url, rock_url, manual_overrides)
     local lua_constraints_str = ""
     local maintainers_str = ""
     local long_desc_str = ""
-    local platforms_str = ""
 
     if manual_overrides["maintainers"] then
        maintainers_str = "    maintainers = with maintainers; [ "..manual_overrides["maintainers"].." ];\n"
@@ -273,7 +253,7 @@ local function convert_spec2nix(spec, rockspec_url, rock_url, manual_overrides)
     end
     local license_str = ""
     if spec.description.license then
-       license_str = [[    license.fullName = ]]..util.LQ(spec.description.license)..";\n"
+       license_str = [[    license.fullName = ]]..convert2nixLicense(spec.description.license)..";\n"
    end
 
    -- should be able to do without 'rec'
@@ -289,7 +269,7 @@ buildLuarocksPackage {
 ]]..propagated_build_inputs_str..[[
 ]]..checkInputsStr..[[
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     homepage = ]]..util.LQ(spec.description.homepage or spec.source.url)..[[;
     description = ]]..util.LQ(spec.description.summary or "No summary")..[[;
 ]]..long_desc_str..[[
@@ -306,11 +286,11 @@ end
 -- @return (spec, url, )
 function run_query (name, version)
     local search = require("luarocks.search")
+    local namespace = nil
 
     -- "src" to fetch only sources
     -- see arch_to_table for, any delimiter will do
-    local operator = ">"
-    local query = queries.new(name, version, false, "src|rockspec")
+    local query = queries.new(name, namespace, version, false, "src|rockspec")
     local url, search_err = search.find_suitable_rock(query)
     if not url then
         util.printerr("can't find suitable rock "..name)
@@ -354,7 +334,7 @@ function nix.command(args)
     if type(name) ~= "string" then
         return nil, "Expects package name as first argument. "..util.see_help("nix")
     end
-    local spec, rock_url, rock_file
+    local rock_url
     local rockspec_name, rockspec_version
     -- assert(type(version) == "string" or not version)
 
@@ -386,7 +366,6 @@ function nix.command(args)
         return false, res1
     end
 
-   local rock_url = nil
    local rockspec_url = nil
    local rockspec_file = nil
    local fetched_file = res1
