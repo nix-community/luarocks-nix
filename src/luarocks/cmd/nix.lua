@@ -15,7 +15,7 @@ local fetch = require("luarocks.fetch")
 local cfg = require("luarocks.core.cfg")
 local queries = require("luarocks.queries")
 local dir = require("luarocks.dir")
-
+local search = require("luarocks.search")
 
 -- new flags must be added to util.lua
 -- ..util.deps_mode_help()
@@ -147,7 +147,7 @@ local function load_dependencies(deps_array)
    local dependencies = ""
    local cons = {}
 
-   for id, dep in ipairs(deps_array)
+   for _, dep in ipairs(deps_array)
    do
       local entry = convert_pkg_name_to_nix(dep.name)
       if entry == "lua" and dep.constraints then
@@ -285,12 +285,10 @@ end
 --
 -- @return (spec, url, )
 function run_query (name, version)
-    local search = require("luarocks.search")
-    local namespace = nil
 
     -- "src" to fetch only sources
     -- see arch_to_table for, any delimiter will do
-    local query = queries.new(name, namespace, version, false, "src|rockspec")
+    local query = queries.new(name, nil, version, false, "src|rockspec")
     local url, search_err = search.find_suitable_rock(query)
     if not url then
         util.printerr("can't find suitable rock "..name)
@@ -339,8 +337,8 @@ function nix.command(args)
     -- assert(type(version) == "string" or not version)
 
     if name:match(".*%.rock$")  then
-        local rock_file = name
-        local spec, msg = fetch.fetch_and_unpack_rock(rock_file, nil)
+        rock_file = name
+        spec, msg = fetch.fetch_and_unpack_rock(rock_file, nil)
         if not spec then
             return false, msg
         end
@@ -348,7 +346,7 @@ function nix.command(args)
         rockspec_version = spec.version
 
     elseif name:match(".*%.rockspec") then
-        local spec, err = fetch.load_rockspec(name, nil)
+        spec, err = fetch.load_rockspec(name, nil)
         if not spec then
             return false, err
         end
