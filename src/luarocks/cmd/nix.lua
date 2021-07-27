@@ -15,6 +15,8 @@ local fetch = require("luarocks.fetch")
 local cfg = require("luarocks.core.cfg")
 local queries = require("luarocks.queries")
 local dir = require("luarocks.dir")
+local search = require("luarocks.search")
+local write_rockspec = require("luarocks.cmd.write_rockspec")
 
 
 -- new flags must be added to util.lua
@@ -22,9 +24,9 @@ local dir = require("luarocks.dir")
 -- nix.help_arguments = "[--maintainers] {<rockspec>|<rock>|<name> [<version>]}"
 function nix.add_to_parser(parser)
    local cmd = parser:command("nix", [[
-Generates a nix package from luarocks package.
-
-Just set the package name.
+Generates a nix derivation from a luarocks package.
+If the argument is a .rockspec or a .rock, this generates a nix derivation matching the rockspec,
+otherwise the program searches luarocks.org with the argument as the package name.
 
 --maintainers set package meta.maintainers
 ]], util.see_also())
@@ -130,14 +132,9 @@ local function url2src(url)
       return pathname
    end
 
+   util.printerr("Unsupported protocol"..protocol)
    assert(false) -- unsupported protocol
    return src
-end
-
-
-local function convert_specsource2nix(spec)
-   assert(type(spec.source.url) == "string")
-   return url2src(spec.source.url)
 end
 
 
@@ -147,7 +144,7 @@ local function load_dependencies(deps_array)
    local dependencies = ""
    local cons = {}
 
-   for id, dep in ipairs(deps_array)
+   for _, dep in ipairs(deps_array)
    do
       local entry = convert_pkg_name_to_nix(dep.name)
       if entry == "lua" and dep.constraints then
@@ -202,15 +199,10 @@ local function convert_spec2nix(spec, rockspec_url, rock_url, manual_overrides)
     dependencies, lua_constraints = load_dependencies(spec.dependencies)
     -- TODO to map lua dependencies to nix ones,
     -- try heuristics with nix-locate or manual table ?
-    local external_deps = ""
-    if spec.external_dependencies then
-       --   for name, ext_files in util.sortedpairs(spec.external_dependencies)
-       -- do
-       --     local name = name:lower()
-       -- external_deps = external_deps..(name)..".dev "
-       -- end
-       external_deps = "# override to account for external deps"
-    end
+    -- local external_deps = ""
+    -- if spec.external_dependencies then
+    --    external_deps = "# override to account for external deps"
+    -- end
 
     if #lua_constraints > 0 then
        lua_constraints_str =  "  disabled = "..table.concat(lua_constraints,' || ')..";\n"
@@ -222,9 +214,12 @@ local function convert_spec2nix(spec, rockspec_url, rock_url, manual_overrides)
        sources = "src = "..gen_src_from_basic_url(rock_url)..";"
     elseif rockspec_url then
 
+       -- we have to embed the valid rockspec since most repos dont contain
+       -- valid rockspecs in the repo for a specific revision (the rockspec is
+       -- manually updated before being uploaded to luarocks.org)
        sources = [[knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
 
-  src = ]].. convert_specsource2nix(spec) ..[[;
+  src = ]].. url2src(spec.source.url)..[[;
 ]]
     else
        return nil, "Either rockspec_url or rock_url must be set"
@@ -285,12 +280,10 @@ end
 --
 -- @return (spec, url, )
 function run_query (name, version)
-    local search = require("luarocks.search")
-    local namespace = nil
 
     -- "src" to fetch only sources
     -- see arch_to_table for, any delimiter will do
-    local query = queries.new(name, namespace, version, false, "src|rockspec")
+    local query = queries.new(name, nil, version, false, "src|rockspec")
     local url, search_err = search.find_suitable_rock(query)
     if not url then
         util.printerr("can't find suitable rock "..name)
@@ -327,69 +320,76 @@ end
 -- @return boolean or (nil, string, exitcode): True if build was successful; nil and an
 -- error message otherwise. exitcode is optionally returned.
 function nix.command(args)
-    local name = args.name
-    local version = args.version
-    local maintainers = args.maintainers
+   local name = args.name
+   local version = args.version
+   local maintainers = args.maintainers
+   local url = write_rockspec.detect_url(name)
 
-    if type(name) ~= "string" then
-        return nil, "Expects package name as first argument. "..util.see_help("nix")
-    end
-    local rock_url
-    local rockspec_name, rockspec_version
+   if type(name) ~= "string" then
+       return nil, "Expects package name as first argument. "..util.see_help("nix")
+   end
+   local rock_url
+   local rockspec_name, rockspec_version
     -- assert(type(version) == "string" or not version)
 
-    if name:match(".*%.rock$")  then
-        local rock_file = name
-        local spec, msg = fetch.fetch_and_unpack_rock(rock_file, nil)
-        if not spec then
-            return false, msg
-        end
-        rockspec_name = spec.name
-        rockspec_version = spec.version
-
-    elseif name:match(".*%.rockspec") then
-        local spec, err = fetch.load_rockspec(name, nil)
-        if not spec then
-            return false, err
-        end
-        rockspec_name = spec.name
-        rockspec_version = spec.version
-    else
-        rockspec_name = name
-        rockspec_version = version
-    end
-
-    url, res1 = run_query (rockspec_name, rockspec_version)
-
-
-    if not url then
-        return false, res1
-    end
-
-   local rockspec_url = nil
-   local rockspec_file = nil
-   local fetched_file = res1
-   if url:match(".*%.rock$")  then
-
-      rock_url = url
-
-      -- here we are not sure it's actually a rock
-      local dir_name, err, errcode = fetch.fetch_and_unpack_rock(fetched_file, dest)
-      if not dir_name then
-         util.printerr("can't fetch and unpack "..name)
-         return nil, err, errcode
+   if name:match(".*%.rock$")  then
+      spec, msg = fetch.fetch_and_unpack_rock(name, nil)
+      if not spec then
+          return false, msg
       end
-      rockspec_file = path.rockspec_name_from_rock(fetched_file)
-      rockspec_file = dir_name.."/"..rockspec_file
-   else
-      -- it's a rockspec
-      rockspec_file = fetched_file
-      rockspec_url = url
-   end
 
-    spec, err = fetch.load_local_rockspec(rockspec_file, nil)
-    if not spec then
-        return nil, err
+   elseif url then
+      print("is it an url ?", url)
+      -- for now assume it is a local url ? (will be passed a value from nix store?
+      -- rockspec
+   elseif name:match(".*%.rockspec") then
+      -- local fetch_git = require("luarocks.fetch.git")
+      -- TODO it could accept the full url https://github.com/nvim-lua/plenary.nvim/blob/master/plenary.nvim-scm-1.rockspec
+      -- dir.split_url
+      -- THis should work:
+      -- local rockspec = fetch.load_rockspec("http://localhost:8080/file/a_rock-1.0-1.rockspec")
+      -- ok, proto = pcall(require, "luarocks.fetch."..protocol:gsub("[+-]", "_"))
+      -- if not ok then
+      --    return nil, "Unknown protocol "..protocol
+      -- end
+      -- os.execute()
+      spec, err = fetch.load_rockspec(name, nil)
+      if not spec then
+          return false, err
+      end
+    else
+      -- assume it's just a name
+      rockspec_name = name
+      rockspec_version = version
+      url, res1 = run_query (rockspec_name, rockspec_version)
+      if not url then
+         return false, res1
+      end
+
+      local rockspec_file = nil
+      local fetched_file = res1
+      if url:match(".*%.rock$")  then
+
+         rock_url = url
+
+         -- here we are not sure it's actually a rock
+         local dir_name, err, errcode = fetch.fetch_and_unpack_rock(fetched_file)
+         if not dir_name then
+            util.printerr("can't fetch and unpack "..name)
+            return nil, err, errcode
+         end
+         rockspec_file = path.rockspec_name_from_rock(fetched_file)
+         rockspec_file = dir_name.."/"..rockspec_file
+      else
+         -- it's a rockspec
+         rockspec_file = fetched_file
+         -- rockspec_url = url
+      end
+
+      spec, err = fetch.load_local_rockspec(rockspec_file, nil)
+      if not spec then
+         return nil, err
+      end
     end
 
     nix_overrides = {
