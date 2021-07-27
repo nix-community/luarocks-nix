@@ -1,17 +1,9 @@
-with import <nixpkgs> {};
-
-let
-  # luaEnv = lua5_2.withPackages( ps: [ ps.luarocks-nix ] );
-  # luarocksLocalCopy = "$PWD";
-in
-luarocks-nix.overrideAttrs (oa: {
-
-  name="luarocks-nix-dev";
-  src = ./.;
-
-  # Not needed anymore ?
-  # shellHook=''
-  #   export LUA_PATH="${luarocksLocalCopy}/src/?.lua;''${LUA_PATH:-}"
-  #   '';
-
-})
+(import (
+  let
+    lock = builtins.fromJSON (builtins.readFile ./flake.lock);
+  in fetchTarball {
+    url = "https://github.com/edolstra/flake-compat/archive/${lock.nodes.flake-compat.locked.rev}.tar.gz";
+    sha256 = lock.nodes.flake-compat.locked.narHash; }
+) {
+  src =  ./.;
+}).shellNix
