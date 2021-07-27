@@ -117,8 +117,10 @@ local simple_scm_protocols = {
    ["hg+ssh"] = true,
 }
 
+
 local detect_url
 do
+   -- program can be 'git' or 'hg', see detect_scm_url
    local function detect_url_from_command(program, args, directory)
       local command = fs.Q(cfg.variables[program:upper()]).. " "..args
       local pipe = io.popen(fs.command_at(directory, fs.quiet_stderr(command)))
@@ -147,9 +149,12 @@ do
       if url_or_dir:match("://") then
          return url_or_dir
       else
-         return detect_scm_url(url_or_dir) or "*** please add URL for source tarball, zip or repository here ***"
+         return detect_scm_url(url_or_dir)
       end
    end
+
+   write_rockspec.detect_url_from_command = detect_url_from_command
+   write_rockspec.detect_url = detect_url
 end
 
 local function detect_homepage(url, homepage)
@@ -303,7 +308,7 @@ function write_rockspec.command(args)
 
    local filename = args.output or dir.path(fs.current_dir(), name:lower().."-"..version.."-1.rockspec")
 
-   local url = detect_url(location)
+   local url = detect_url(location)  or "*** please add URL for source tarball, zip or repository here ***"
    local homepage = detect_homepage(url, args.homepage)
 
    local rockspec, err = rockspecs.from_persisted_table(filename, {
@@ -354,7 +359,7 @@ function write_rockspec.command(args)
          local_dir = nil
       end
    end
-   
+
    if not local_dir then
       local_dir = "."
    end
@@ -393,14 +398,14 @@ function write_rockspec.command(args)
    end
 
    fill_as_builtin(rockspec, libs)
-      
+
    rockspec_cleanup(rockspec)
 
    persist.save_from_table(filename, rockspec, type_rockspec.order)
 
-   util.printout()   
+   util.printout()
    util.printout("Wrote template at "..filename.." -- you should now edit and finish it.")
-   util.printout()   
+   util.printout()
 
    return true
 end
