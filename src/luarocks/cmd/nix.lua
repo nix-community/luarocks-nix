@@ -310,7 +310,7 @@ end
 function convert_pkg_name_to_nix(name)
 
    -- % works as an escape character
-   local res, _ = name:gsub("%.", "_")
+   local res, _ = name:gsub("%.", "-")
    return res
 end
 
