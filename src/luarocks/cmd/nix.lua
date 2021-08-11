@@ -16,6 +16,8 @@ local cfg = require("luarocks.core.cfg")
 local queries = require("luarocks.queries")
 local dir = require("luarocks.dir")
 local search = require("luarocks.search")
+local write_rockspec = "luarocks.cmd.write_rockspec",
+
 
 -- new flags must be added to util.lua
 -- ..util.deps_mode_help()
@@ -339,11 +341,19 @@ function nix.command(args)
       end
 
     elseif name:match(".*%.rockspec") then
+      -- if it's a rockspec,
+      spec, err = fetch.load_rockspec(name, nil)
+      if not spec then
+          return false, err
+      end
+    elseif name:match(".*%.rockspec") then
+      -- if it's a rockspec,
       spec, err = fetch.load_rockspec(name, nil)
       if not spec then
           return false, err
       end
     else
+      -- assume it's just a name
       rockspec_name = name
       rockspec_version = version
       url, res1 = run_query (rockspec_name, rockspec_version)
