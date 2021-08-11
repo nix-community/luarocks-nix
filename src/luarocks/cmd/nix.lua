@@ -16,7 +16,7 @@ local cfg = require("luarocks.core.cfg")
 local queries = require("luarocks.queries")
 local dir = require("luarocks.dir")
 local search = require("luarocks.search")
-local write_rockspec = "luarocks.cmd.write_rockspec",
+local write_rockspec = require("luarocks.cmd.write_rockspec")
 
 
 -- new flags must be added to util.lua
@@ -171,9 +171,6 @@ local function load_dependencies(deps_array)
    return dependencies, cons
 end
 
--- mirror://luarocks/fifo-0.2-0.src.rock
-local function gen_url()
-end
 
 -- TODO take into account external_dependencies
 -- @param spec table
@@ -323,31 +320,39 @@ end
 -- @return boolean or (nil, string, exitcode): True if build was successful; nil and an
 -- error message otherwise. exitcode is optionally returned.
 function nix.command(args)
-    local name = args.name
-    local version = args.version
-    local maintainers = args.maintainers
+   local name = args.name
+   local version = args.version
+   local maintainers = args.maintainers
+   local url = write_rockspec.detect_url(name)
 
-    if type(name) ~= "string" then
-        return nil, "Expects package name as first argument. "..util.see_help("nix")
-    end
-    local rock_url
-    local rockspec_name, rockspec_version
+   if type(name) ~= "string" then
+       return nil, "Expects package name as first argument. "..util.see_help("nix")
+   end
+   local rock_url
+   local rockspec_name, rockspec_version
     -- assert(type(version) == "string" or not version)
 
-    if name:match(".*%.rock$")  then
+   if name:match(".*%.rock$")  then
       spec, msg = fetch.fetch_and_unpack_rock(name, nil)
       if not spec then
           return false, msg
       end
 
-    elseif name:match(".*%.rockspec") then
-      -- if it's a rockspec,
-      spec, err = fetch.load_rockspec(name, nil)
-      if not spec then
-          return false, err
-      end
-    elseif name:match(".*%.rockspec") then
-      -- if it's a rockspec,
+   elseif url then
+      print("is it an url ?", url)
+      -- for now assume it is a local url ? (will be passed a value from nix store?
+      -- rockspec
+   elseif name:match(".*%.rockspec") then
+      -- local fetch_git = require("luarocks.fetch.git")
+      -- TODO it could accept the full url https://github.com/nvim-lua/plenary.nvim/blob/master/plenary.nvim-scm-1.rockspec
+      -- dir.split_url
+      -- THis should work:
+      -- local rockspec = fetch.load_rockspec("http://localhost:8080/file/a_rock-1.0-1.rockspec")
+      -- ok, proto = pcall(require, "luarocks.fetch."..protocol:gsub("[+-]", "_"))
+      -- if not ok then
+      --    return nil, "Unknown protocol "..protocol
+      -- end
+      -- os.execute()
       spec, err = fetch.load_rockspec(name, nil)
       if not spec then
           return false, err
