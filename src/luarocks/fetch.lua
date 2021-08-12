@@ -334,6 +334,18 @@ function fetch.fetch_and_unpack_rock(url, dest, verify)
    return unpack_dir
 end
 
+
+function fetch.validate_rockspec_filename(abs_filename)
+   local basename = dir.base_name(abs_filename)
+   if basename ~= "rockspec" then
+      if not basename:match("(.*)%-[^-]*%-[0-9]*") then
+         return nil
+      end
+   end
+   return true
+end
+
+
 --- Back-end function that actually loads the local rockspec.
 -- Performs some validation and postprocessing of the rockspec contents.
 -- @param rel_filename string: The local filename of the rockspec file.
@@ -345,11 +357,8 @@ function fetch.load_local_rockspec(rel_filename, quick)
    assert(type(rel_filename) == "string")
    local abs_filename = fs.absolute_name(rel_filename)
 
-   local basename = dir.base_name(abs_filename)
-   if basename ~= "rockspec" then
-      if not basename:match("(.*)%-[^-]*%-[0-9]*") then
-         return nil, "Expected filename in format 'name-version-revision.rockspec'."
-      end
+   if not fetch.validate_rockspec_filename(abs_filename) then
+      return nil, "Expected filename in format 'name-version-revision.rockspec'."
    end
 
    local tbl, err = persist.load_into_table(abs_filename)
