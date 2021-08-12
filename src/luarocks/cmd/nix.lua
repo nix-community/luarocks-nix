@@ -15,6 +15,7 @@ local fetch = require("luarocks.fetch")
 local cfg = require("luarocks.core.cfg")
 local queries = require("luarocks.queries")
 local dir = require("luarocks.dir")
+local fs = require("luarocks.fs")
 local search = require("luarocks.search")
 local write_rockspec = require("luarocks.cmd.write_rockspec")
 
@@ -340,8 +341,27 @@ function nix.command(args)
 
    elseif url then
       print("is it an url ?", url)
-      -- for now assume it is a local url ? (will be passed a value from nix store?
-      -- rockspec
+      -- local pattern = "plenary.nvim-scm-1.rockspec"
+      -- local src_dir = url
+      local src_dir = "/home/teto/plenary.nvim"
+      local res = fs.find(src_dir)
+      print("Printing results")
+
+      -- -- return base_name:match("(.*)%.[^.]*.rock") .. ".rockspec"
+      -- rockspec_file = nil
+      for _, file in ipairs(res) do
+         -- if file:match("(.*)-([^-]+-%d+)%.(rockspec)") then
+         -- local pattern = "(.*)-([^-]+-%d+)%.(rockspec)"
+         -- print(file)
+         local pattern = "(.*).(rockspec)"
+         if file:match(pattern) then
+            rockspec_file = file
+            print("rockspec", rockspec_file)
+         end
+      end
+   -- -- local rockspec_file = dir_name..".rockspec"
+
+   util.printout("rockspec=", rockspec_file)
    elseif name:match(".*%.rockspec") then
       -- local fetch_git = require("luarocks.fetch.git")
       -- TODO it could accept the full url https://github.com/nvim-lua/plenary.nvim/blob/master/plenary.nvim-scm-1.rockspec
