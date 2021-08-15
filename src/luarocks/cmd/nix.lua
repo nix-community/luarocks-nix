@@ -176,9 +176,11 @@ end
 -- TODO take into account external_dependencies
 -- @param spec table
 -- @param rock_url
+-- @param rockspec_url Rockspecs are not easy to find in project repos, so we need to reference the luarocks one
+-- @param rockspec_relpath path towards the rockspec from within the repository (should this be a directory ?)
 -- @param rock_file if nil, will be fetched from url
 -- @param manual_overrides a table of custom nix settings like "maintainers"
-local function convert_spec2nix(spec, rockspec_url, rock_url, manual_overrides)
+local function convert_spec2nix(spec, rockspec_relpath, rock_url, manual_overrides)
     assert ( spec )
     assert ( type(rock_url) == "string" or not rock_url )
 
@@ -213,12 +215,13 @@ local function convert_spec2nix(spec, rockspec_url, rock_url, manual_overrides)
     local sources = ""
     if rock_url then
        sources = "src = "..gen_src_from_basic_url(rock_url)..";"
-    elseif rockspec_url then
+    elseif rockspec_relpath then
 
        -- we have to embed the valid rockspec since most repos dont contain
        -- valid rockspecs in the repo for a specific revision (the rockspec is
        -- manually updated before being uploaded to luarocks.org)
-       sources = [[knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
+       -- sources = [[knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
+       sources = [[rockspecDir = ]]..rockspec_relpath..[[;
 
   src = ]].. url2src(spec.source.url)..[[;
 ]]
@@ -252,12 +255,20 @@ local function convert_spec2nix(spec, rockspec_url, rock_url, manual_overrides)
        license_str = [[    license.fullName = ]]..convert2nixLicense(spec.description.license)..";\n"
    end
 
+
+   local rockspec_str = ""
+   if rockspec_relpath ~= nil then
+      rockspec_str = rockspec_relpath
+   end
+
+
    -- should be able to do without 'rec'
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
     local header = [[
 buildLuarocksPackage {
   pname = ]]..util.LQ(spec.name)..[[;
   version = ]]..util.LQ(spec.version)..[[;
+]]..rockspec_str..[[
 
   ]]..sources..[[
 
@@ -326,6 +337,8 @@ function nix.command(args)
    local maintainers = args.maintainers
    local url = write_rockspec.detect_url(name)
 
+   local rockspec_relpath = nil
+
    if type(name) ~= "string" then
        return nil, "Expects package name as first argument. "..util.see_help("nix")
    end
@@ -343,40 +356,42 @@ function nix.command(args)
       print("is it an url ?", url)
       -- local pattern = "plenary.nvim-scm-1.rockspec"
       -- local src_dir = url
+      -- TODO make mirroring
+      local mirroring = "no_mirror"
+      local cachefile, err, errcode = fetch.fetch_caching(url)
+      print("cachefile", cachefile)
+      -- if cachefile then
+      --    file = dir.path(temp_dir, filename)
+      --    fs.copy(cachefile, file)
+      -- end
       local src_dir = "/home/teto/plenary.nvim"
       local res = fs.find(src_dir)
       print("Printing results")
 
       -- -- return base_name:match("(.*)%.[^.]*.rock") .. ".rockspec"
-      -- rockspec_file = nil
       for _, file in ipairs(res) do
          -- if file:match("(.*)-([^-]+-%d+)%.(rockspec)") then
          -- local pattern = "(.*)-([^-]+-%d+)%.(rockspec)"
          -- print(file)
          local pattern = "(.*).(rockspec)"
          if file:match(pattern) then
-            rockspec_file = file
-            print("rockspec", rockspec_file)
+            -- rockspec_relpath = file
+            rockspec_relpath = dir.base_name(file)
+            print("rockspec file", file)
+            print("rockspec_relpath", rockspec_relpath)
+            -- todo check for version against the candidates
          end
       end
-   -- -- local rockspec_file = dir_name..".rockspec"
-
-   util.printout("rockspec=", rockspec_file)
-   elseif name:match(".*%.rockspec") then
+      -- local = dir_name..".rockspec"
       -- local fetch_git = require("luarocks.fetch.git")
-      -- TODO it could accept the full url https://github.com/nvim-lua/plenary.nvim/blob/master/plenary.nvim-scm-1.rockspec
-      -- dir.split_url
-      -- THis should work:
-      -- local rockspec = fetch.load_rockspec("http://localhost:8080/file/a_rock-1.0-1.rockspec")
-      -- ok, proto = pcall(require, "luarocks.fetch."..protocol:gsub("[+-]", "_"))
-      -- if not ok then
-      --    return nil, "Unknown protocol "..protocol
+
+      -- util.printout("rockspec=", rockspec_relpath)
+   -- elseif name:match(".*%.rockspec") then
+      -- -- os.execute()
+      -- spec, err = fetch.load_rockspec(name, nil)
+      -- if not spec then
+      --     return false, err
       -- end
-      -- os.execute()
-      spec, err = fetch.load_rockspec(name, nil)
-      if not spec then
-          return false, err
-      end
     else
       -- assume it's just a name
       rockspec_name = name
@@ -412,14 +427,14 @@ function nix.command(args)
       end
     end
 
-    nix_overrides = {
-       maintainers = maintainers
-    }
-    local derivation, err = convert_spec2nix(spec, rockspec_url, rock_url, nix_overrides)
-    if derivation then
-      print(derivation)
-    end
-    return derivation, err
+   nix_overrides = {
+      maintainers = maintainers
+   }
+   local derivation, err = convert_spec2nix(spec, rockspec_relpath, rock_url, nix_overrides)
+   if derivation then
+     print(derivation)
+   end
+   return derivation, err
 end
 
 return nix

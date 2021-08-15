@@ -18,7 +18,14 @@
 
     packages.luarocks = pkgs.luarocks;
 
-    defaultPackage = self.packages."${system}".luarocks;
+    defaultPackage = self.packages."${system}".luarocks.overrideAttrs(oa: {
+      nativeBuildInputs = [
+        pkgs.luaPackages.luacheck
+
+      ];
+
+
+    });
     # devShell = pkgs.mkShell {
     #   name = "luarocks-dev";
     #   buildInputs = [
