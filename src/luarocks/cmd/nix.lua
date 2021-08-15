@@ -98,6 +98,7 @@ end
 
 -- Generate nix code to fetch from a git repository
 local function gen_src_from_git_url(url)
+   -- TODO we could check a specific branch with --rev
 
    -- deal with  git://github.com/antirez/lua-cmsgpack.git for instance
    cmd = "nix-prefetch-git --fetch-submodules --quiet "..url
@@ -107,9 +108,17 @@ local function gen_src_from_git_url(url)
    if generatedSrc and generatedSrc == "" then
       util.printerr("Call to "..cmd.." failed")
    end
-   src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. generatedSrc .. [[ '') ["date" "path"]) ]]
 
-   return src
+   return generatedSrc
+end
+
+local function get_path(json_str)
+   cmd = "nix-eval "..json_str
+
+   debug(cmd)
+   local outPath = util.popen_read(cmd, "*a")
+   debug(outPath)
+   return outPath
 end
 
 -- converts url to nix "src"
@@ -126,7 +135,11 @@ local function url2src(url)
    end
 
    if protocol == "git" then
-      return gen_src_from_git_url(url)
+      nix_json = gen_src_from_git_url(url)
+      src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path"]) ]]
+
+      return src
+
    end
 
    if protocol == "file" then
@@ -356,9 +369,12 @@ function nix.command(args)
       print("is it an url ?", url)
       -- local pattern = "plenary.nvim-scm-1.rockspec"
       -- local src_dir = url
-      -- TODO make mirroring
-      local mirroring = "no_mirror"
-      local cachefile, err, errcode = fetch.fetch_caching(url)
+      local generated_src = gen_src_from_git_url(url)
+      -- print (generated_src)
+      local storePath = generated_src:match("path\": \"([^\n]+)\",")
+      -- local src_dir =
+      -- local cachefile, err, errcode = fetch.fetch_caching(url)
+      print("storePath", storePath)
       print("cachefile", cachefile)
       -- if cachefile then
       --    file = dir.path(temp_dir, filename)
