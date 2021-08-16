@@ -367,20 +367,21 @@ function nix.command(args)
 
    elseif url then
       print("is it an url ?", url)
-      -- local pattern = "plenary.nvim-scm-1.rockspec"
-      -- local src_dir = url
+      -- pri
+      local rockspec_filename = nil
       local generated_src = gen_src_from_git_url(url)
       -- print (generated_src)
       local storePath = generated_src:match("path\": \"([^\n]+)\",")
       -- local src_dir =
       -- local cachefile, err, errcode = fetch.fetch_caching(url)
       print("storePath", storePath)
-      print("cachefile", cachefile)
+      -- print("cachefile", cachefile)
       -- if cachefile then
       --    file = dir.path(temp_dir, filename)
       --    fs.copy(cachefile, file)
       -- end
-      local src_dir = "/home/teto/plenary.nvim"
+      -- local src_dir = "/home/teto/plenary.nvim"
+      local src_dir = storePath
       local res = fs.find(src_dir)
       print("Printing results")
 
@@ -391,15 +392,20 @@ function nix.command(args)
          -- print(file)
          local pattern = "(.*).(rockspec)"
          if file:match(pattern) then
-            -- rockspec_relpath = file
+            rockspec_filename = storePath.. "/" .. file
             rockspec_relpath = dir.base_name(file)
             print("rockspec file", file)
             print("rockspec_relpath", rockspec_relpath)
+            print("rockspec_filename", rockspec_filename)
             -- todo check for version against the candidates
          end
       end
       -- local = dir_name..".rockspec"
       -- local fetch_git = require("luarocks.fetch.git")
+      spec, err = fetch.load_local_rockspec(rockspec_filename, nil)
+      if not spec then
+         return nil, err
+      end
 
       -- util.printout("rockspec=", rockspec_relpath)
    -- elseif name:match(".*%.rockspec") then

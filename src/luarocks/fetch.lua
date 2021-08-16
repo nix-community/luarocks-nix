@@ -356,6 +356,7 @@ end
 function fetch.load_local_rockspec(rel_filename, quick)
    assert(type(rel_filename) == "string")
    local abs_filename = fs.absolute_name(rel_filename)
+   local basename = dir.base_name(abs_filename)
 
    if not fetch.validate_rockspec_filename(abs_filename) then
       return nil, "Expected filename in format 'name-version-revision.rockspec'."
@@ -404,7 +405,7 @@ function fetch.load_rockspec(url, location, verify)
    end
 
    local tmpname = "luarocks-rockspec-"..name
-   local filename, err, errcode
+   local filename, errcode
    if location then
       local ok, err = fs.change_dir(location)
       if not ok then return nil, err end
@@ -464,7 +465,7 @@ function fetch.get_sources(rockspec, extract, dest_dir)
       end
    end
    if extract then
-      local ok, err = fs.change_dir(store_dir)
+      ok, err = fs.change_dir(store_dir)
       if not ok then return nil, err end
       ok, err = fs.unpack_archive(rockspec.source.file)
       if not ok then return nil, err end
