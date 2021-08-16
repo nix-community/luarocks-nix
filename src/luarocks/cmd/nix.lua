@@ -234,9 +234,7 @@ local function convert_spec2nix(spec, rockspec_relpath, rock_url, manual_overrid
        -- valid rockspecs in the repo for a specific revision (the rockspec is
        -- manually updated before being uploaded to luarocks.org)
        -- sources = [[knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;
-       sources = [[rockspecDir = ]]..rockspec_relpath..[[;
-
-  src = ]].. url2src(spec.source.url)..[[;
+       sources = "src = ".. url2src(spec.source.url)..[[;
 ]]
     else
        return nil, "Either rockspec_url or rock_url must be set"
@@ -270,8 +268,10 @@ local function convert_spec2nix(spec, rockspec_relpath, rock_url, manual_overrid
 
 
    local rockspec_str = ""
-   if rockspec_relpath ~= nil then
-      rockspec_str = rockspec_relpath
+   if rockspec_relpath ~= nil and rockspec_relpath ~= "." and rockspec_relpath ~= "" then
+      -- rockspecDir = ]]..rockspec_relpath..[[;
+      rockspec_str = [[  rockspecDir = "]]..rockspec_relpath..[[;
+]]
    end
 
 
@@ -393,9 +393,9 @@ function nix.command(args)
          local pattern = "(.*).(rockspec)"
          if file:match(pattern) then
             rockspec_filename = storePath.. "/" .. file
-            rockspec_relpath = dir.base_name(file)
+            rockspec_relpath = dir.dir_name(file)
             print("rockspec file", file)
-            print("rockspec_relpath", rockspec_relpath)
+            print("rockspec_relpath [".. rockspec_relpath .."]")
             print("rockspec_filename", rockspec_filename)
             -- todo check for version against the candidates
          end
