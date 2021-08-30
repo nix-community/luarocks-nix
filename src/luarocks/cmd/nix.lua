@@ -125,8 +125,10 @@ local function url2src(url)
       return gen_src_from_basic_url(url)
    end
 
-   if protocol == "git" then
-      local nix_json = gen_src_from_git_url(url)
+   if protocol == "git" or protocol == "git+https" then
+      local normalized_url = "https://"..pathname
+      -- print("normalized", normalized_url)
+      local nix_json = gen_src_from_git_url(normalized_url)
       src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path"]) ]]
 
       return src
@@ -137,7 +139,7 @@ local function url2src(url)
       return pathname
    end
 
-   util.printerr("Unsupported protocol"..protocol)
+   util.printerr("Unsupported protocol "..protocol)
    assert(false) -- unsupported protocol
    return src
 end
