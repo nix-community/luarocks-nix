@@ -250,12 +250,13 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
 
    -- introduced in rockspec format 3
    local checkInputsStr = ""
-   if #checkInputs > 0 then
-      checkInputsStr = "  checkInputs = [ "..checkInputs.."];\n"
-      -- for now set it to false else it creates infinite loops in the nix code because
-      -- of the way checkInputs are handled
-      checkInputsStr = checkInputsStr.."  doCheck = false;\n"
-   end
+   -- Disabled for now
+   -- if #checkInputs > 0 then
+   --    checkInputsStr = "  checkInputs = [ "..checkInputs.."];\n"
+   --    -- for now set it to false else it creates infinite loops in the nix code because
+   --    -- of the way checkInputs are handled
+   --    checkInputsStr = checkInputsStr.."  doCheck = false;\n"
+   -- end
    local license_str = ""
    if spec.description.license then
       license_str = [[    license.fullName = ]]..convert2nixLicense(spec.description.license)..";\n"
