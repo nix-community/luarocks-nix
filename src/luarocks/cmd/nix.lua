@@ -97,8 +97,8 @@ local function gen_src_from_basic_url(url)
 end
 
 -- Generate nix code to fetch from a git repository
+-- TODO we could check a specific branch with --rev
 local function gen_src_from_git_url(url, ref)
-   -- TODO we could check a specific branch with --rev
 
    -- deal with  git://github.com/antirez/lua-cmsgpack.git for instance
    local cmd = "nix-prefetch-git --fetch-submodules --quiet "..url
@@ -118,6 +118,7 @@ end
 -- converts url to nix "src"
 -- while waiting for a program capable to generate the nix code for us
 -- @param source dict: the rockspec spec.source, contains tag etc
+-- @return dependency, src
 local function url2src(url, ref)
    assert (url)
 
@@ -127,17 +128,14 @@ local function url2src(url, ref)
    local protocol, pathname = dir.split_url(url)
    debug("Generating src for protocol:"..protocol.." to "..pathname)
    if dir.is_basic_protocol(protocol) then
-      return gen_src_from_basic_url(url)
+      return "fetchurl", gen_src_from_basic_url(url)
    end
 
    if protocol == "git" or protocol == "git+https" then
       local normalized_url = "https://"..pathname
-      -- print("normalized", normalized_url)
       local nix_json = gen_src_from_git_url(normalized_url, ref)
       src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path"]) ]]
-
-      return src
-
+      return "fetchgit", src
    end
 
    if protocol == "file" then
@@ -146,14 +144,13 @@ local function url2src(url, ref)
 
    util.printerr("Unsupported protocol "..protocol)
    assert(false) -- unsupported protocol
-   return src
 end
 
 
 -- @param dependencies array of dependencies
--- @return dependency string and associated constraints
+-- @return dependency list with nixified names and associated constraints
 local function load_dependencies(deps_array)
-   local dependencies = ""
+   local dependencies = {}
    local cons = {}
 
    for _, dep in ipairs(deps_array)
@@ -166,7 +163,7 @@ local function load_dependencies(deps_array)
             if c.op == ">=" then
                constraint_str = "luaOlder "..util.LQ(tostring(c.version))
             elseif c.op == "==" then
-               constraint_str = "lua.luaversion != "..util.LQ(tostring(c.version))
+               constraint_str = "luaversion != "..util.LQ(tostring(c.version))
             elseif c.op == ">" then
                constraint_str = "luaOlder "..util.LQ(tostring(c.version))
             elseif c.op == "<" then
@@ -178,7 +175,7 @@ local function load_dependencies(deps_array)
 
          end
       end
-      dependencies = dependencies..entry.." "
+      dependencies[#dependencies + 1] = entry
    end
    return dependencies, cons
 end
@@ -216,30 +213,30 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    -- end
 
    if #lua_constraints > 0 then
-      lua_constraints_str =  "  disabled = "..table.concat(lua_constraints,' || ')..";\n"
+      lua_constraints_str =  "  disabled = with lua; "..table.concat(lua_constraints,' || ')..";\n"
    end
 
    -- if only a rockspec than translate the way to fetch the sources
    local sources
    local rockspec_str = ""
-
+   local fetchDeps, src_str
    if rockspec_url then
      -- sources = "src = "..gen_src_from_basic_url(rock_url)..";"
-      rockspec_str = [[  knownRockspec = (]]..url2src(rockspec_url)..[[).outPath;]]
+     _, src_str = url2src(rockspec_url)
+      rockspec_str = [[  knownRockspec = (]]..src_str..[[).outPath;]]
    end
 
    -- we have to embed the valid rockspec since most repos dont contain
    -- valid rockspecs in the repo for a specific revision (the rockspec is
    -- manually updated before being uploaded to luarocks.org)
-   sources = "src = ".. url2src(spec.source.url, spec.source.tag)..[[;
-]]
-   -- else
-   --    return nil, "Either rockspec_url or rock_url must be set"
-   -- end
+   fetchDeps, src_str = url2src(spec.source.url, spec.source.tag)
+   sources = "src = "..src_str..";\n"
 
    local propagated_build_inputs_str = ""
+   local call_package_str = ", "..fetchDeps
    if #dependencies > 0 then
-      propagated_build_inputs_str = "  propagatedBuildInputs = [ "..dependencies.."];\n"
+      propagated_build_inputs_str = "  propagatedBuildInputs = [ "..table.concat(dependencies, " ").." ];\n"
+      call_package_str   = call_package_str..", "..table.concat(dependencies, ", ").."\n"
    end
 
    local checkInputs, _ = load_dependencies(spec.test_dependencies)
@@ -247,7 +244,7 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    if spec.test and spec.test.type then
       local test_type = spec.test.type
       if test_type == "busted" then
-        checkInputs = checkInputs.."busted "
+        checkInputs = table.concat(checkInputs, ", ")
       end
    end
 
@@ -266,7 +263,6 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
 
 
    if rockspec_relpath ~= nil and rockspec_relpath ~= "." and rockspec_relpath ~= "" then
-      -- rockspecDir = ]]..rockspec_relpath..[[;
       rockspec_str = [[  rockspecDir = "]]..rockspec_relpath..[[";
 ]]
    end
@@ -274,7 +270,12 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
 
    -- should be able to do without 'rec'
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
+   -- fetchurl, fetchgit
+   --    if #dependencies > 0 then
    local header = [[
+{ buildLuarocksPackage, luaOlder, luaAtLeast
+]]..call_package_str..[[
+}:
 buildLuarocksPackage {
   pname = ]]..util.LQ(spec.name)..[[;
   version = ]]..util.LQ(spec.version)..[[;
@@ -293,10 +294,9 @@ buildLuarocksPackage {
 ]]..maintainers_str..[[
 ]]..license_str..[[
   };
-};
-]]
+}]]
 
-    return header
+   return header
 end
 
 -- @return (spec, url, )
@@ -389,9 +389,6 @@ function nix.command(args)
          -- local pattern = "(.*)-(.*).(rockspec)"
          -- local pkg_name, pkg_version = basename:match(pattern)
          if pkg_name then
-            -- print("pkg_version ", pkg_version)
-            -- print("pkg_name ", pkg_name)
-            -- print("comparing version", version, " with pkg_version ", pkg_version)
             local newer
 
             if version then
@@ -479,7 +476,6 @@ function nix.command(args)
    local nix_overrides = {
       maintainers = maintainers
    }
-   -- print("spec", spec)
    local derivation, err = convert_spec2nix(spec, rockspec_relpath, rock_url, nix_overrides)
    if derivation then
      print(derivation)
