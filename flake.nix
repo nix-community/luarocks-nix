@@ -20,7 +20,7 @@
 
     defaultPackage = self.packages."${system}".luarocks.overrideAttrs(oa: {
       nativeBuildInputs = [
-        pkgs.luaPackages.luacheck
+        pkgs.lua51Packages.luacheck
 
       ];
 
