@@ -195,6 +195,8 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    local lua_constraints_str = ""
    local maintainers_str = ""
    local long_desc_str = ""
+   local native_build_inputs_str = ""
+   local call_package_str = ""
 
    if manual_overrides["maintainers"] then
       maintainers_str = "    maintainers = with lib.maintainers; [ "..manual_overrides["maintainers"].." ];\n"
@@ -232,11 +234,19 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    fetchDeps, src_str = url2src(spec.source.url, spec.source.tag)
    sources = "src = "..src_str..";\n"
 
+   if spec.build and spec.build.type then
+      local build_type = spec.build.type
+      if build_type == "cmake" then
+         native_build_inputs_str = "  nativeBuildInputs = [ cmake ];\n"
+         call_package_str = call_package_str .. ", cmake"
+      end
+   end
+
    local propagated_build_inputs_str = ""
-   local call_package_str = ", "..fetchDeps
+   call_package_str = call_package_str..", "..fetchDeps
    if #dependencies > 0 then
       propagated_build_inputs_str = "  propagatedBuildInputs = [ "..table.concat(dependencies, " ").." ];\n"
-      call_package_str   = call_package_str..", "..table.concat(dependencies, ", ").."\n"
+      call_package_str  = call_package_str..", "..table.concat(dependencies, ", ").."\n"
    end
 
    local checkInputs, _ = load_dependencies(spec.test_dependencies)
@@ -285,6 +295,7 @@ buildLuarocksPackage {
   ]]..sources..[[
 
 ]]..lua_constraints_str..[[
+]]..native_build_inputs_str..[[
 ]]..propagated_build_inputs_str..[[
 ]]..checkInputsStr..[[
 
