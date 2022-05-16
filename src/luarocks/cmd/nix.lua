@@ -70,6 +70,20 @@ local function get_basic_checksum(url)
    return checksum
 end
 
+-- Check if the package url matches a mirror url
+-- @param repo: a string
+-- @return table: A table where keys are package names
+local function check_url_against_mirror(url, mirror)
+   local dirname = dir.dir_name(url)
+   -- local inspect = require'inspect'
+   -- print(inspect.inspect(mirror))
+   if mirror == dirname then
+      local basename = dir.base_name(url)
+      final_url = "mirror://luarocks/"..basename
+      return true, final_url
+   end
+   return false, _
+end
 
 -- Generate nix code using fetchurl
 -- Detects if the server is in the list of possible mirrors
@@ -79,12 +93,16 @@ local function gen_src_from_basic_url(url)
    local checksum = get_basic_checksum(url)
    local final_url = url
 
-   local dirname = dir.dir_name(url)
    for _, repo in ipairs(cfg.rocks_servers) do
-      if repo == dirname then
-         local basename = dir.base_name(url)
-         final_url = "mirror://luarocks/"..basename
-         break
+      if type(repo) == "string" then
+         repo = { repo }
+      end
+      for _, mirror in ipairs(repo) do
+         local res, url2 = check_url_against_mirror(final_url, mirror)
+         if res then
+            final_url = url2
+            break
+         end
       end
    end
 
