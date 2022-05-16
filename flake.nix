@@ -38,6 +38,8 @@
     devShells = {
       luarocks-51 = mkDevShell "51";
       luarocks-52 = mkDevShell "52";
+      luarocks-53 = mkDevShell "53";
+      luarocks-54 = mkDevShell "54";
     };
   });
 }
