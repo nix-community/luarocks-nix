@@ -125,7 +125,7 @@ local function gen_src_from_git_url(url, ref)
    end
 
    debug(cmd)
-   local generatedSrc= util.popen_read(cmd, "*a")
+   local generatedSrc = util.popen_read(cmd, "*a")
    if generatedSrc and generatedSrc == "" then
       util.printerr("Call to "..cmd.." failed")
    end
@@ -260,6 +260,8 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
       end
    end
 
+   local checkInputs, _ = load_dependencies(spec.test_dependencies)
+
    local propagated_build_inputs_str = ""
    call_package_str = call_package_str..", "..fetchDeps
    if #dependencies > 0 then
@@ -267,24 +269,20 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
       call_package_str  = call_package_str..", "..table.concat(dependencies, ", ").."\n"
    end
 
-   local checkInputs, _ = load_dependencies(spec.test_dependencies)
 
-   if spec.test and spec.test.type then
-      local test_type = spec.test.type
-      if test_type == "busted" then
-        checkInputs = table.concat(checkInputs, ", ")
-      end
-   end
+   -- if spec.test and spec.test.type then
+   --    local test_type = spec.test.type
+   --    if test_type == "busted" then
+   --      checkInputs = table.concat(checkInputs, ", ")
+   --    end
+   -- end
 
    -- introduced in rockspec format 3
    local checkInputsStr = ""
-   -- Disabled for now
-   -- if #checkInputs > 0 then
-   --    checkInputsStr = "  checkInputs = [ "..checkInputs.."];\n"
-   --    -- for now set it to false else it creates infinite loops in the nix code because
-   --    -- of the way checkInputs are handled
-   --    checkInputsStr = checkInputsStr.."  doCheck = false;\n"
-   -- end
+   if #checkInputs > 0 then
+      checkInputsStr = "  checkInputs = [ "..table.concat(checkInputs, " ").." ];\n"
+      call_package_str = call_package_str..", "..table.concat(checkInputs, " ").."\n"
+   end
    local license_str = ""
    if spec.description.license then
       license_str = [[    license.fullName = ]]..convert2nixLicense(spec.description.license)..";\n"
@@ -485,7 +483,6 @@ function nix.command(args)
 
       local rockspec_file
       local fetched_file = res1
-      -- if url:match(".*%.rock$")  then
 
          rock_url = url
       --    -- here we are not sure it's actually a rock
