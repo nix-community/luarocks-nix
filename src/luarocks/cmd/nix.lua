@@ -193,9 +193,9 @@ local function load_dependencies(deps_array)
 
          end
       end
-      dependencies[#dependencies + 1] = entry
+      dependencies[entry] = true
    end
-   return dependencies, cons
+   return util.keys(dependencies), cons
 end
 
 
