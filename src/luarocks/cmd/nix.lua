@@ -57,12 +57,15 @@ local function convert2nixLicense(license)
 end
 
 
-local function get_basic_checksum(url)
+local function get_basic_checksum(url, unpack)
    -- TODO download the src.rock unpack it and get the hash around it ?
-   local prefetch_url_program = "nix-prefetch-url"
-   -- add --unpack flag to be able to use the resulet with fetchFromGithub and co ?
 
-   local command = prefetch_url_program.." "..(url)
+   local command = "nix-prefetch-url "
+   if unpack then
+      command = command.."--unpack "
+   end
+   command = command..(url)
+
    local r = io.popen(command)
    -- "*a"
    local checksum = r:read()
@@ -90,7 +93,14 @@ end
 -- in which case it uses the special nixpkgs uris mirror://luarocks
 local function gen_src_from_basic_url(url)
    assert(type(url) == "string")
-   local checksum = get_basic_checksum(url)
+
+   local unpack = false
+   local _, _, path_no_query = string.find(url.."?", "([^?]+)?.*$")
+   if path_no_query and string.find(path_no_query, "%.zip$") then
+      unpack = true
+   end
+
+   local checksum = get_basic_checksum(url, unpack)
    local final_url = url
 
    for _, repo in ipairs(cfg.rocks_servers) do
@@ -106,7 +116,11 @@ local function gen_src_from_basic_url(url)
       end
    end
 
-   local src = [[fetchurl {
+   local fetcher = "fetchurl"
+   if unpack then
+      fetcher = "fetchTarball"
+   end
+   local src = fetcher..[[ {
     url    = "]]..final_url..[[";
     sha256 = ]]..util.LQ(checksum)..[[;
   }]]
