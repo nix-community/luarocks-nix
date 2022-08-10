@@ -59,11 +59,44 @@ end
 
 local function get_basic_checksum(command)
    -- TODO download the src.rock unpack it and get the hash around it ?
-   local r = io.popen(command)
-   -- "*a"
-   local checksum = r:read()
 
-   return checksum
+   -- redirect stderr to a tempfile
+   -- Note: This logic is posix-only
+   local tmpfile = os.tmpname()
+   local r = io.popen(command.." 2>"..tmpfile)
+
+   -- checksum is on stdout
+   local checksum = r:read()
+   -- path is on stderr
+   local path = ""
+   local fd = io.open(tmpfile, "rb")
+   if fd then
+      local stderr = fd:read("*a")
+      _, _, path = string.find(stderr, "^path is '(.+)'\n$")
+   end
+   os.remove(tmpfile)
+
+   if not path or path == "" then
+      io.printerr("Failed to get path from nix-prefetch-url")
+      return nil, false
+   end
+   debug("Prefetched path:", path)
+
+   local f = io.popen("file "..path)
+   local file_out = f:read()
+   local _, _, desc = string.find(file_out, "^"..util.matchquote(path)..": (.*)$")
+   if not desc then
+      io.printerr("Failed to run 'file' on prefetched path")
+      return nil, false
+   end
+
+   if string.find(desc, "^Zip archive data") then
+      return checksum, true
+   end
+   if string.find(desc, "^gzip compressed data") then
+      return checksum, true
+   end
+   return checksum, false
 end
 
 -- Check if the package url matches a mirror url
@@ -90,13 +123,12 @@ local function gen_src_from_basic_url(url)
    local command = "nix-prefetch-url "..url
    local fetcher = "fetchurl"
 
-   local _, _, path_no_query = string.find(url.."?", "([^?]+)?.*$")
-   if path_no_query and string.find(path_no_query, "%.zip$") then
+   local checksum, unpack = get_basic_checksum(command)
+   if unpack then
       command = "nix-prefetch-url --unpack "..url
       fetcher = "fetchTarball"
    end
 
-   local checksum = get_basic_checksum(command)
    local final_url = url
 
    for _, repo in ipairs(cfg.rocks_servers) do
@@ -158,6 +190,9 @@ local function url2src(url, ref)
    if protocol == "git" or protocol == "git+https" then
       local normalized_url = "https://"..pathname
       local nix_json = gen_src_from_git_url(normalized_url, ref)
+      if nix_json == "" then
+         return nil, nil
+      end
       src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path"]) ]]
       return "fetchgit", src
    end
