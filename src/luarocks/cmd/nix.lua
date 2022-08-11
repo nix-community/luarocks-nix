@@ -56,18 +56,53 @@ local function convert2nixLicense(license)
    return util.LQ(license)
 end
 
-
-local function get_basic_checksum(url)
-   -- TODO download the src.rock unpack it and get the hash around it ?
-   local prefetch_url_program = "nix-prefetch-url"
-   -- add --unpack flag to be able to use the resulet with fetchFromGithub and co ?
-
-   local command = prefetch_url_program.." "..(url)
-   local r = io.popen(command)
-   -- "*a"
+local function checksum_unpack(url)
+   local r = io.popen("nix-prefetch-url --unpack "..url)
    local checksum = r:read()
-
    return checksum
+end
+
+
+local function checksum_and_file(url)
+   -- TODO download the src.rock unpack it and get the hash around it ?
+
+   -- redirect stderr to a tempfile
+   -- Note: This logic is posix-only
+   local tmpfile = os.tmpname()
+   local r = io.popen("nix-prefetch-url "..url.." 2>"..tmpfile)
+
+   -- checksum is on stdout
+   local checksum = r:read()
+   -- path is on stderr
+   local path = ""
+   local fd = io.open(tmpfile, "rb")
+   if fd then
+      local stderr = fd:read("*a")
+      _, _, path = string.find(stderr, "^path is '(.+)'\n$")
+   end
+   os.remove(tmpfile)
+
+   if not path or path == "" then
+      io.printerr("Failed to get path from nix-prefetch-url")
+      return nil, false
+   end
+   debug("Prefetched path:", path)
+
+   local f = io.popen("file "..path)
+   local file_out = f:read()
+   local _, _, desc = string.find(file_out, "^"..util.matchquote(path)..": (.*)$")
+   if not desc then
+      io.printerr("Failed to run 'file' on prefetched path")
+      return nil, false
+   end
+
+   if string.find(desc, "^Zip archive data") then
+      return checksum, true
+   end
+   if string.find(desc, "^gzip compressed data") then
+      return checksum, true
+   end
+   return checksum, false
 end
 
 -- Check if the package url matches a mirror url
@@ -90,7 +125,15 @@ end
 -- in which case it uses the special nixpkgs uris mirror://luarocks
 local function gen_src_from_basic_url(url)
    assert(type(url) == "string")
-   local checksum = get_basic_checksum(url)
+
+   local fetcher = "fetchurl"
+
+   local checksum, unpack = checksum_and_file(url)
+   if unpack then
+      fetcher = "fetchTarball"
+      checksum = checksum_unpack(url)
+   end
+
    local final_url = url
 
    for _, repo in ipairs(cfg.rocks_servers) do
@@ -106,7 +149,7 @@ local function gen_src_from_basic_url(url)
       end
    end
 
-   local src = [[fetchurl {
+   local src = fetcher..[[ {
     url    = "]]..final_url..[[";
     sha256 = ]]..util.LQ(checksum)..[[;
   }]]
@@ -152,6 +195,9 @@ local function url2src(url, ref)
    if protocol == "git" or protocol == "git+https" then
       local normalized_url = "https://"..pathname
       local nix_json = gen_src_from_git_url(normalized_url, ref)
+      if nix_json == "" then
+         return nil, nil
+      end
       src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path"]) ]]
       return "fetchgit", src
    end
