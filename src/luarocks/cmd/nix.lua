@@ -56,14 +56,20 @@ local function convert2nixLicense(license)
    return util.LQ(license)
 end
 
+local function checksum_unpack(url)
+   local r = io.popen("nix-prefetch-url --unpack "..url)
+   local checksum = r:read()
+   return checksum
+end
 
-local function get_basic_checksum(command)
+
+local function checksum_and_file(url)
    -- TODO download the src.rock unpack it and get the hash around it ?
 
    -- redirect stderr to a tempfile
    -- Note: This logic is posix-only
    local tmpfile = os.tmpname()
-   local r = io.popen(command.." 2>"..tmpfile)
+   local r = io.popen("nix-prefetch-url "..url.." 2>"..tmpfile)
 
    -- checksum is on stdout
    local checksum = r:read()
@@ -120,13 +126,12 @@ end
 local function gen_src_from_basic_url(url)
    assert(type(url) == "string")
 
-   local command = "nix-prefetch-url "..url
    local fetcher = "fetchurl"
 
-   local checksum, unpack = get_basic_checksum(command)
+   local checksum, unpack = checksum_and_file(url)
    if unpack then
-      command = "nix-prefetch-url --unpack "..url
       fetcher = "fetchTarball"
+      checksum = checksum_unpack(url)
    end
 
    local final_url = url
