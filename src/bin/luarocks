@@ -1,7 +1,5 @@
 #!/usr/bin/env lua
 
---package.loaded["luarocks.core.hardcoded"] = { SYSCONFDIR = [[/nix/store/y6ck6hwqyl0a9731dmv6a3q3dxc0xl37-luarocks-3.9.0/etc/luarocks]] }
-
 -- Load cfg first so that the loader knows it is running inside LuaRocks
 local cfg = require("luarocks.core.cfg")
 
