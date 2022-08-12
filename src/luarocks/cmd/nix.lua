@@ -83,7 +83,7 @@ local function checksum_and_file(url)
    os.remove(tmpfile)
 
    if not path or path == "" then
-      io.printerr("Failed to get path from nix-prefetch-url")
+      util.printerr("Failed to get path from nix-prefetch-url")
       return nil, false
    end
    debug("Prefetched path:", path)
@@ -92,7 +92,7 @@ local function checksum_and_file(url)
    local file_out = f:read()
    local _, _, desc = string.find(file_out, "^"..util.matchquote(path)..": (.*)$")
    if not desc then
-      io.printerr("Failed to run 'file' on prefetched path")
+      util.printerr("Failed to run 'file' on prefetched path")
       return nil, false
    end
 
