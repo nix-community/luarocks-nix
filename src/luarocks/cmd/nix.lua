@@ -63,6 +63,7 @@ local function checksum_unpack(url)
 end
 
 
+-- @return (string, string)  returns (checksum, fetcher name)
 local function checksum_and_file(url)
    -- TODO download the src.rock unpack it and get the hash around it ?
 
@@ -97,12 +98,12 @@ local function checksum_and_file(url)
    end
 
    if string.find(desc, "^Zip archive data") then
-      return checksum, true
+      return checksum, "fetchzip"
    end
    if string.find(desc, "^gzip compressed data") then
-      return checksum, true
+      return checksum, "fetchurl"
    end
-   return checksum, false
+   return checksum, "fetchurl"
 end
 
 -- Check if the package url matches a mirror url
@@ -123,14 +124,12 @@ end
 -- Generate nix code using fetchurl
 -- Detects if the server is in the list of possible mirrors
 -- in which case it uses the special nixpkgs uris mirror://luarocks
+-- @return (fetcher, src) a tuple
 local function gen_src_from_basic_url(url)
    assert(type(url) == "string")
 
-   local fetcher = "fetchurl"
-
-   local checksum, unpack = checksum_and_file(url)
-   if unpack then
-      fetcher = "fetchTarball"
+   local checksum, fetcher = checksum_and_file(url)
+   if fetcher == "fetchzip" then
       checksum = checksum_unpack(url)
    end
 
@@ -153,7 +152,7 @@ local function gen_src_from_basic_url(url)
     url    = "]]..final_url..[[";
     sha256 = ]]..util.LQ(checksum)..[[;
   }]]
-   return src
+   return fetcher, src
 
 end
 
@@ -189,7 +188,7 @@ local function url2src(url, ref)
    local protocol, pathname = dir.split_url(url)
    debug("Generating src for protocol:"..protocol.." to "..pathname)
    if dir.is_basic_protocol(protocol) then
-      return "fetchurl", gen_src_from_basic_url(url)
+      return gen_src_from_basic_url(url)
    end
 
    if protocol == "git" or protocol == "git+https" then
@@ -203,7 +202,7 @@ local function url2src(url, ref)
    end
 
    if protocol == "file" then
-      return pathname
+      return nil, pathname
    end
 
    util.printerr("Unsupported protocol "..protocol)
@@ -259,7 +258,7 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    local lua_constraints_str = ""
    local maintainers_str = ""
    local long_desc_str = ""
-   local native_build_inputs_str = ""
+   local native_build_inputs = {}
    local call_package_str = ""
 
    if manual_overrides["maintainers"] then
@@ -301,8 +300,7 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    if spec.build and spec.build.type then
       local build_type = spec.build.type
       if build_type == "cmake" then
-         native_build_inputs_str = "  nativeBuildInputs = [ cmake ];\n"
-         call_package_str = call_package_str .. ", cmake"
+         native_build_inputs[#native_build_inputs + 1] = "cmake"
       end
    end
 
@@ -312,6 +310,7 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    call_package_str = call_package_str..", "..fetchDeps
    if #dependencies > 0 then
       propagated_build_inputs_str = "  propagatedBuildInputs = [ "..table.concat(dependencies, " ").." ];\n"
+      -- return util.keys(dependencies), cons
       call_package_str  = call_package_str..", "..table.concat(dependencies, ", ").."\n"
    end
 
@@ -327,7 +326,7 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    local checkInputsStr = ""
    if #checkInputs > 0 then
       checkInputsStr = "  checkInputs = [ "..table.concat(checkInputs, " ").." ];\n"
-      call_package_str = call_package_str..", "..table.concat(checkInputs, " ").."\n"
+      call_package_str = call_package_str..", "..table.concat(checkInputs, " ")
    end
    local license_str = ""
    if spec.description.license then
@@ -340,6 +339,13 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
 ]]
    end
 
+   local native_build_inputs_str = ""
+   if #native_build_inputs > 0 then
+      native_build_inputs_str = "  nativeBuildInputs = [ ".. table.concat(native_build_inputs, " ").." ];\n"
+      call_package_str = call_package_str..", "..table.concat(native_build_inputs, " ")
+   end
+
+   -- call_package_str = call_package_str..", "..table.concat(propagated_build_inputs, " ").."\n"
 
    -- should be able to do without 'rec'
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
