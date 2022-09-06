@@ -39,9 +39,13 @@
       {
 
         packages = {
-          default = self.packages.${system}."luarocks-5.1";
-        } // (nixpkgs.lib.listToAttrs (builtins.map (luaInterpreter:
-            nixpkgs.lib.nameValuePair "luarocks-${luaInterpreter.luaversion}" (mkPackage luaInterpreter))
+          default = self.packages.${system}."luarocks-51";
+        } // (nixpkgs.lib.listToAttrs (builtins.map (luaInterpreter: let
+            versions = nixpkgs.lib.splitVersion luaInterpreter.luaversion;
+            pkgName = "luarocks-${builtins.elemAt versions 0}${builtins.elemAt versions 1}";
+          in
+          nixpkgs.lib.nameValuePair pkgName (mkPackage luaInterpreter)
+        )
           luaInterpreters));
 
         # devShells = {
