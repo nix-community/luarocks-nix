@@ -388,7 +388,7 @@ local function run_query (name, version)
    local query = queries.new(name, nil, version, false, arch)
    local url, search_err = search.find_suitable_rock(query)
    if not url then
-       util.printerr("can't find suitable rock "..name)
+       util.printerr("can't find suitable rockspec "..name)
        return nil, search_err
    end
    debug('found url '..url)
