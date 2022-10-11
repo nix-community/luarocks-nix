@@ -309,6 +309,7 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    local propagated_build_inputs_str = ""
    call_package_str = call_package_str..", "..fetchDeps
    if #dependencies > 0 then
+      table.sort(dependencies)
       propagated_build_inputs_str = "  propagatedBuildInputs = [ "..table.concat(dependencies, " ").." ];\n"
       -- return util.keys(dependencies), cons
       call_package_str  = call_package_str..", "..table.concat(dependencies, ", ").."\n"
