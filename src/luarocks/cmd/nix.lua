@@ -20,6 +20,7 @@ local search = require("luarocks.search")
 local write_rockspec = require("luarocks.cmd.write_rockspec")
 local vers = require("luarocks.core.vers")
 
+local _
 
 -- new flags must be added to util.lua
 -- ..util.deps_mode_help()
@@ -75,23 +76,23 @@ local function checksum_and_file(url)
    -- checksum is on stdout
    local checksum = r:read()
    -- path is on stderr
-   local path = ""
+   local fetched_path = ""
    local fd = io.open(tmpfile, "rb")
    if fd then
       local stderr = fd:read("*a")
-      _, _, path = string.find(stderr, "^path is '(.+)'\n$")
+      _, _, fetched_path = string.find(stderr, "^path is '(.+)'\n$")
    end
    os.remove(tmpfile)
 
-   if not path or path == "" then
+   if not fetched_path or fetched_path == "" then
       util.printerr("Failed to get path from nix-prefetch-url")
       return nil, false
    end
-   debug("Prefetched path:", path)
+   debug("Prefetched path:", fetched_path)
 
-   local f = io.popen("file "..path)
+   local f = io.popen("file "..fetched_path)
    local file_out = f:read()
-   local _, _, desc = string.find(file_out, "^"..util.matchquote(path)..": (.*)$")
+   local _, _, desc = string.find(file_out, "^"..util.matchquote(fetched_path)..": (.*)$")
    if not desc then
       util.printerr("Failed to run 'file' on prefetched path")
       return nil, false
@@ -115,7 +116,7 @@ local function check_url_against_mirror(url, mirror)
    -- print(inspect.inspect(mirror))
    if mirror == dirname then
       local basename = dir.base_name(url)
-      final_url = "mirror://luarocks/"..basename
+      local final_url = "mirror://luarocks/"..basename
       return true, final_url
    end
    return false, _
@@ -182,8 +183,6 @@ end
 local function url2src(url, ref)
    assert (url)
 
-   local src = ""
-
    -- logic inspired from rockspecs.from_persisted_table
    local protocol, pathname = dir.split_url(url)
    debug("Generating src for protocol:"..protocol.." to "..pathname)
@@ -197,7 +196,7 @@ local function url2src(url, ref)
       if nix_json == "" then
          return nil, nil
       end
-      src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path"]) ]]
+      local src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path"]) ]]
       return "fetchgit", src
    end
 
@@ -431,7 +430,7 @@ function nix.command(args)
    local name = args.name
    local version = args.version
    local maintainers = args.maintainers
-   local spec, msg
+   local spec, msg, err
    local rockspec_relpath = nil
 
    if type(name) ~= "string" then
@@ -447,7 +446,7 @@ function nix.command(args)
           return false, msg
       end
    elseif name:match(".*%.rockspec$") then
-      rockspec_filename = name
+      local rockspec_filename = name
       spec, err = fetch.load_local_rockspec(rockspec_filename, nil)
       if not spec then
          return nil, err
