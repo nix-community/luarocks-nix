@@ -405,7 +405,7 @@ function fetch.load_rockspec(url, location, verify)
    end
 
    local tmpname = "luarocks-rockspec-"..name
-   local filename, errcode
+   local filename, err, errcode
    if location then
       local ok, err = fs.change_dir(location)
       if not ok then return nil, err end
