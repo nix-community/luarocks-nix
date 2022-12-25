@@ -1,3 +1,56 @@
+## What's new in LuaRocks 3.9.2
+
+* Configuration now honors typical compiler environment variables
+  for all build backends:
+  * `MAKE`, `CC`, `AR`, `RANLIB` on Unix
+  * `MAKE`, `CC`, `AR`, `WINDRES`, `LINK`, `MT` on Windows
+* `builtin` build mode now supports Clang on Windows
+* `luarocks test` now checks/installs all dependency kinds
+  (build, runtime, test), so you don't need to run
+  `luarocks make --only-deps` in CI environments to get all
+  dependencies needed to run a test
+* MinGW: default to x86_64 compiler on 64-bit platforms
+* Fixed crash if `variables.LUA*` are unset in configuration
+* Fix `luarocks test --prepare` behavior for non-Busted tests
+* Internal API fixes
+  * `path.path_to_module`: accept custom file extensions in
+    package path variables
+  * `persist.save_from_table`: ensure directory exists when
+    saving a file
+
+## What's new in LuaRocks 3.9.1
+
+* Fixed error message when Lua library is not found
+* Fixed build of Windows binary
+* A couple of minor feature additions:
+  * API: `loader.which` has a new mode for searching `package.path/cpath`
+    * Adds a new second argument, `where`, a string which indicates places
+      to search for the module. If `where` contains `"l"`, it will search
+      using the LuaRocks loader; if it contains `"p"`, it will look in the
+      filesystem using `package.path` and `package.cpath`. You can use both
+      at the same time.
+  * `--no-project` flag can be used to override `.luarocks` project directory
+    detection
+
+## What's new in LuaRocks 3.9.0
+
+* `builtin` build mode now always respects CC, CFLAGS and LDFLAGS
+* Check that lua.h version matches the desired Lua version
+* Check that the version of the Lua C library matches the desired Lua version
+* Fixed deployment of non-wrapped binaries
+* Fixed crash when `--lua-version` option is malformed
+* Fixed help message for `--pin` option
+* Unix: use native methods and don't always rely on $USER to determine user
+* Windows: use native CLI tooling more
+* macOS: support .tbd extension when checking for libraries
+* macOS: add XCode SDK path to search paths
+* macOS: add best-effort heuristic for library search using Homebrew paths
+* macOS: avoid quoting issues with LIBFLAG
+* macOS: deployment target is now 11.0 on macOS 11+
+* added DragonFly BSD support
+* LuaRocks test suite now runs on Lua 5.4 and LuaJIT
+* Internal dependencies of standalone LuaRocks executable were bumped
+
 ## What's new in LuaRocks 3.8.0
 
 * Support GitHub's protocol security changes transparently.
