@@ -23,7 +23,10 @@
       ];
 
         mkPackage = luaInterpreter:
-            luaInterpreter.pkgs.luarocks;
+          luaInterpreter.pkgs.luarocks-nix.overrideAttrs (old: {
+            version = "dev";
+            src = self;
+          });
 
         mkDevShell = luaInterpreter:
           luaInterpreter.pkgs.luarocks.overrideAttrs(oa: {
