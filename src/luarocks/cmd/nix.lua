@@ -326,7 +326,7 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    local checkInputsStr = ""
    if #checkInputs > 0 then
       checkInputsStr = "  checkInputs = [ "..table.concat(checkInputs, " ").." ];\n"
-      call_package_str = call_package_str..", "..table.concat(checkInputs, " ")
+      call_package_str = call_package_str..", "..table.concat(checkInputs, ",")
    end
    local license_str = ""
    if spec.description.license then
