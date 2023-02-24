@@ -210,26 +210,33 @@ end
 
 
 -- @param dependencies array of dependencies
--- @return dependency list with nixified names and associated constraints
+-- @return tuple (dependency list of nixified names, associated constraints, associated nix derivations)
 local function load_dependencies(deps_array)
    local dependencies = {}
    local cons = {}
+   local constraintInputs = {}
 
    for _, dep in ipairs(deps_array)
    do
       local entry = nix.convert_pkg_name_to_nix(dep.name)
       if entry == "lua" and dep.constraints then
+
          for _, c in ipairs(dep.constraints)
          do
             local constraint_str = nil
+
             if c.op == ">=" then
                constraint_str = "luaOlder "..util.LQ(tostring(c.version))
+               constraintInputs["luaOlder"] = 1
             elseif c.op == "==" then
-               constraint_str = "luaversion != "..util.LQ(tostring(c.version))
+               constraint_str = "lua.luaversion != "..util.LQ(tostring(c.version))
+               constraintInputs["lua"] = 1
             elseif c.op == ">" then
                constraint_str = "luaOlder "..util.LQ(tostring(c.version))
+               constraintInputs["luaOlder"] = 1
             elseif c.op == "<" then
                constraint_str = "luaAtLeast "..util.LQ(tostring(c.version))
+               constraintInputs["luaAtLeast"] = 1
             end
             if constraint_str then
                cons[#cons+1] = "("..constraint_str..")"
@@ -239,7 +246,7 @@ local function load_dependencies(deps_array)
       end
       dependencies[entry] = true
    end
-   return util.keys(dependencies), cons
+   return dependencies, cons, constraintInputs
 end
 
 
@@ -258,7 +265,7 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    local maintainers_str = ""
    local long_desc_str = ""
    local native_build_inputs = {}
-   local call_package_str = ""
+   local call_package_inputs = { buildLuarocksPackage=1 }
 
    if manual_overrides["maintainers"] then
       maintainers_str = "    maintainers = with lib.maintainers; [ "..manual_overrides["maintainers"].." ];\n"
@@ -268,7 +275,9 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
       long_desc_str = "    longDescription = ''"..spec.detailed.."'';"
    end
 
-   local dependencies, lua_constraints = load_dependencies(spec.dependencies)
+   local dependencies, lua_constraints, constraintInputs = load_dependencies(spec.dependencies)
+   util.deep_merge(call_package_inputs, constraintInputs)
+
    -- TODO to map lua dependencies to nix ones,
    -- try heuristics with nix-locate or manual table ?
    -- local external_deps = ""
@@ -276,8 +285,11 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    --    external_deps = "# override to account for external deps"
    -- end
 
+   -- print("TOTO", constraintInputs)
+
    if #lua_constraints > 0 then
-      lua_constraints_str =  "  disabled = with lua; "..table.concat(lua_constraints,' || ')..";\n"
+      -- with lua
+      lua_constraints_str =  "  disabled = "..table.concat(lua_constraints,' || ')..";\n"
    end
 
    -- if only a rockspec than translate the way to fetch the sources
@@ -296,24 +308,25 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    fetchDeps, src_str = url2src(spec.source.url, spec.source.tag)
    sources = "src = "..src_str..";\n"
 
+   assert (fetchDeps ~= nil)
+   call_package_inputs[fetchDeps]=2
+
    if spec.build and spec.build.type then
       local build_type = spec.build.type
       if build_type == "cmake" then
-         native_build_inputs[#native_build_inputs + 1] = "cmake"
+         native_build_inputs["cmake"] = 1
       end
    end
 
-   local checkInputs, _ = load_dependencies(spec.test_dependencies)
 
    local propagated_build_inputs_str = ""
-   call_package_str = call_package_str..", "..fetchDeps
+
+   util.deep_merge(call_package_inputs, dependencies)
+   dependencies = util.keys(dependencies)
    if #dependencies > 0 then
       table.sort(dependencies)
       propagated_build_inputs_str = "  propagatedBuildInputs = [ "..table.concat(dependencies, " ").." ];\n"
-      -- return util.keys(dependencies), cons
-      call_package_str  = call_package_str..", "..table.concat(dependencies, ", ").."\n"
    end
-
 
    -- if spec.test and spec.test.type then
    --    local test_type = spec.test.type
@@ -324,9 +337,10 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
 
    -- introduced in rockspec format 3
    local checkInputsStr = ""
+   local checkInputs, _ = load_dependencies(spec.test_dependencies)
    if #checkInputs > 0 then
       checkInputsStr = "  checkInputs = [ "..table.concat(checkInputs, " ").." ];\n"
-      call_package_str = call_package_str..", "..table.concat(checkInputs, ",")
+      util.deep_merge(call_package_inputs, checkInputs)
    end
    local license_str = ""
    if spec.description.license then
@@ -342,19 +356,15 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    local native_build_inputs_str = ""
    if #native_build_inputs > 0 then
       native_build_inputs_str = "  nativeBuildInputs = [ ".. table.concat(native_build_inputs, " ").." ];\n"
-      call_package_str = call_package_str..", "..table.concat(native_build_inputs, " ")
+      util.deep_merge(call_package_inputs, native_build_inputs)
    end
 
-   -- call_package_str = call_package_str..", "..table.concat(propagated_build_inputs, " ").."\n"
 
    -- should be able to do without 'rec'
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
-   -- fetchurl, fetchgit
-   --    if #dependencies > 0 then
+   local call_package_str = table.concat(util.keys(call_package_inputs), ", ")
    local header = [[
-{ buildLuarocksPackage, luaOlder, luaAtLeast
-]]..call_package_str..[[
-}:
+{ ]]..call_package_str..[[ }:
 buildLuarocksPackage {
   pname = ]]..util.LQ(spec.name)..[[;
   version = ]]..util.LQ(spec.version)..[[;
