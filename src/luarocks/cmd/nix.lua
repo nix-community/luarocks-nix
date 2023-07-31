@@ -298,8 +298,12 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    local fetchDeps, src_str
    if rockspec_url then
      -- sources = "src = "..gen_src_from_basic_url(rock_url)..";"
-     _, src_str = url2src(rockspec_url)
-      rockspec_str = [[  knownRockspec = (]]..src_str..[[).outPath;]]
+     fetchDeps , src_str = url2src(rockspec_url)
+     rockspec_str = [[  knownRockspec = (]]..src_str..[[).outPath;]]
+     if fetchDeps ~= nil then
+      call_package_inputs[fetchDeps]=2
+     end
+
    end
 
    -- we have to embed the valid rockspec since most repos dont contain
@@ -517,14 +521,13 @@ function nix.command(args)
       end
 
       if not current_candidate then
-         local err = "can't find a valid candidate "
+         err = "can't find a valid candidate "
          util.printerr(err)
          -- return nil, err
          return
       end
       -- local fetch_git = require("luarocks.fetch.git")
       debug("loading rockspec ", rockspec_filename)
-      local err
       spec, err = fetch.load_local_rockspec(rockspec_filename, nil)
       if not spec then
          return nil, err
