@@ -366,7 +366,10 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
 
    -- should be able to do without 'rec'
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
-   local call_package_str = table.concat(util.keys(call_package_inputs), ", ")
+   local call_package_input_names = util.keys(call_package_inputs)
+   table.sort(call_package_input_names)
+
+   local call_package_str = table.concat(call_package_input_names, ", ")
    local header = [[
 { ]]..call_package_str..[[ }:
 buildLuarocksPackage {
