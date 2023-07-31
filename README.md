@@ -1,5 +1,9 @@
 <p align="center"><a href="http://luarocks.org"><img border="0" src="http://luarocks.github.io/luarocks/luarocks.png" alt="LuaRocks" width="500px"></a></p>
 
+This is a fork that adds a "nix" command to generate nix packages from
+rockspecs.
+You can test the fork with `luarocks nix <PACKAGE>`, e.g., `luarocks nix date`.
+
 A package manager for Lua modules.
 
 [![Build Status](https://github.com/luarocks/luarocks/actions/workflows/test.yml/badge.svg)](https://github.com/luarocks/luarocks/actions)
