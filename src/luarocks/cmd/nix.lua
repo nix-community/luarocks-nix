@@ -298,8 +298,12 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    local fetchDeps, src_str
    if rockspec_url then
      -- sources = "src = "..gen_src_from_basic_url(rock_url)..";"
-     _, src_str = url2src(rockspec_url)
-      rockspec_str = [[  knownRockspec = (]]..src_str..[[).outPath;]]
+     fetchDeps , src_str = url2src(rockspec_url)
+     rockspec_str = [[  knownRockspec = (]]..src_str..[[).outPath;]]
+     if fetchDeps ~= nil then
+      call_package_inputs[fetchDeps]=2
+     end
+
    end
 
    -- we have to embed the valid rockspec since most repos dont contain
@@ -362,7 +366,10 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
 
    -- should be able to do without 'rec'
    -- we have to quote the urls because some finish with the bookmark '#' which fails with nix
-   local call_package_str = table.concat(util.keys(call_package_inputs), ", ")
+   local call_package_input_names = util.keys(call_package_inputs)
+   table.sort(call_package_input_names)
+
+   local call_package_str = table.concat(call_package_input_names, ", ")
    local header = [[
 { ]]..call_package_str..[[ }:
 buildLuarocksPackage {
@@ -517,14 +524,13 @@ function nix.command(args)
       end
 
       if not current_candidate then
-         local err = "can't find a valid candidate "
+         err = "can't find a valid candidate "
          util.printerr(err)
          -- return nil, err
          return
       end
       -- local fetch_git = require("luarocks.fetch.git")
       debug("loading rockspec ", rockspec_filename)
-      local err
       spec, err = fetch.load_local_rockspec(rockspec_filename, nil)
       if not spec then
          return nil, err
