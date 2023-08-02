@@ -196,7 +196,7 @@ local function url2src(url, ref)
       if nix_json == "" then
          return nil, nil
       end
-      local src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path"]) ]]
+      local src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path" "sha256"]) ]]
       return "fetchgit", src
    end
 
