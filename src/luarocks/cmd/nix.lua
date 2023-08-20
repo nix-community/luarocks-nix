@@ -178,26 +178,27 @@ end
 
 -- converts url to nix "src"
 -- while waiting for a program capable to generate the nix code for us
--- @param source dict: the rockspec spec.source, contains tag etc
+-- @param source dict: the rockspec spec.source, contains "tag", branch etc
 -- @return dependency, src
-local function url2src(url, ref)
-   assert (url)
+local function url2src(src)
+
+   assert (type(src) == "table")
 
    -- logic inspired from rockspecs.from_persisted_table
-   local protocol, pathname = dir.split_url(url)
+   local protocol, pathname = dir.split_url(src.url)
    debug("Generating src for protocol:"..protocol.." to "..pathname)
    if dir.is_basic_protocol(protocol) then
-      return gen_src_from_basic_url(url)
+      return gen_src_from_basic_url(src.url)
    end
 
    if protocol == "git" or protocol == "git+https" then
       local normalized_url = "https://"..pathname
-      local nix_json = gen_src_from_git_url(normalized_url, ref)
+      local nix_json = gen_src_from_git_url(normalized_url, src.ref or src.branch)
       if nix_json == "" then
          return nil, nil
       end
-      local src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path" "sha256"]) ]]
-      return "fetchgit", src
+      local nix_src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path" "sha256"]) ]]
+      return "fetchgit", nix_src
    end
 
    if protocol == "file" then
@@ -285,8 +286,6 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    --    external_deps = "# override to account for external deps"
    -- end
 
-   -- print("TOTO", constraintInputs)
-
    if #lua_constraints > 0 then
       -- with lua
       lua_constraints_str =  "  disabled = "..table.concat(lua_constraints,' || ')..";\n"
@@ -298,7 +297,7 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    local fetchDeps, src_str
    if rockspec_url then
      -- sources = "src = "..gen_src_from_basic_url(rock_url)..";"
-     fetchDeps , src_str = url2src(rockspec_url)
+     fetchDeps, src_str = url2src({ url = rockspec_url})
      rockspec_str = [[  knownRockspec = (]]..src_str..[[).outPath;]]
      if fetchDeps ~= nil then
       call_package_inputs[fetchDeps]=2
@@ -309,7 +308,7 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    -- we have to embed the valid rockspec since most repos dont contain
    -- valid rockspecs in the repo for a specific revision (the rockspec is
    -- manually updated before being uploaded to luarocks.org)
-   fetchDeps, src_str = url2src(spec.source.url, spec.source.tag)
+   fetchDeps, src_str = url2src(spec.source)
    sources = "src = "..src_str..";\n"
 
    assert (fetchDeps ~= nil)
