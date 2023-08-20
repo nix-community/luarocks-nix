@@ -125,7 +125,7 @@ end
 -- Generate nix code using fetchurl
 -- Detects if the server is in the list of possible mirrors
 -- in which case it uses the special nixpkgs uris mirror://luarocks
--- @return (fetcher, src) a tuple
+-- @return (fetcher, src) a tuple of (fetcher attribute: string, generated nix 'src': string),
 local function gen_src_from_basic_url(url)
    assert(type(url) == "string")
 
@@ -159,12 +159,17 @@ end
 
 -- Generate nix code to fetch from a git repository
 -- TODO we could check a specific branch with --rev
-local function gen_src_from_git_url(url, ref)
+local function gen_src_from_git_url(src)
 
    -- deal with  git://github.com/antirez/lua-cmsgpack.git for instance
-   local cmd = "nix-prefetch-git --fetch-submodules --quiet "..url
+   local cmd = "nix-prefetch-git --fetch-submodules --quiet "..src.url
+   local ref = src.ref or src.tag
    if ref then
       cmd = cmd.." --rev "..ref
+   end
+
+   if src.branch then
+      cmd = cmd.." --branch-name '"..src.branch.."'"
    end
 
    debug(cmd)
@@ -193,7 +198,8 @@ local function url2src(src)
 
    if protocol == "git" or protocol == "git+https" then
       local normalized_url = "https://"..pathname
-      local nix_json = gen_src_from_git_url(normalized_url, src.ref or src.branch)
+      src.url = normalized_url
+      local nix_json = gen_src_from_git_url(src)
       if nix_json == "" then
          return nil, nil
       end
@@ -472,7 +478,7 @@ function nix.command(args)
 
       debug("is it an url ?", url)
       local rockspec_filename = nil
-      local generated_src = gen_src_from_git_url(url)
+      local _, generated_src = url2src(url)
       local storePath = generated_src:match("path\": \"([^\n]+)\",")
       local src_dir = storePath
       local res = fs.find(src_dir)
