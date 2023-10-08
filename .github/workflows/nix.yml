@@ -14,3 +14,4 @@ jobs:
     - run: result/bin/luarocks nix lua-iconv
     - run: result/bin/luarocks nix cqueues
     - run: result/bin/luarocks nix digestif
+    - run: result/bin/luarocks nix https://github.com/luarocks/argparse.git

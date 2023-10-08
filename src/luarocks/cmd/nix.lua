@@ -22,6 +22,27 @@ local vers = require("luarocks.core.vers")
 
 local _
 
+
+-- Copy of util.popen_read in src/luarocks/core/util.lua
+-- but one that returns status too
+local function popen_read(cmd, spec)
+   local dir_sep = package.config:sub(1, 1)
+   local tmpfile = (dir_sep == "\\")
+                   and (os.getenv("TMP") .. "/luarocks-" .. tostring(math.floor(math.random() * 10000)))
+                   or os.tmpname()
+   local status = os.execute(cmd .. " > " .. tmpfile)
+   local fd = io.open(tmpfile, "rb")
+   if not fd then
+      os.remove(tmpfile)
+      return ""
+   end
+   local out = fd:read(spec or "*l")
+   fd:close()
+   os.remove(tmpfile)
+   return status, out or ""
+end
+
+
 -- new flags must be added to util.lua
 -- ..util.deps_mode_help()
 -- nix.help_arguments = "[--maintainers] {<rockspec>|<rock>|<name> [<version>]}"
@@ -57,6 +78,7 @@ local function convert2nixLicense(license)
    return util.LQ(license)
 end
 
+---@param url string The url to get checksum for
 local function checksum_unpack(url)
    local r = io.popen("nix-prefetch-url --unpack "..url)
    local checksum = r:read()
@@ -173,8 +195,9 @@ local function gen_src_from_git_url(src)
    end
 
    debug(cmd)
-   local generatedSrc = util.popen_read(cmd, "*a")
-   if generatedSrc and generatedSrc == "" then
+   local status, generatedSrc = popen_read(cmd, "*a")
+
+   if status ~= true or (generatedSrc and generatedSrc == "") then
       util.printerr("Call to "..cmd.." failed")
    end
 
@@ -478,7 +501,8 @@ function nix.command(args)
 
       debug("is it an url ?", url)
       local rockspec_filename = nil
-      local _, generated_src = url2src(url)
+      local generated_src = gen_src_from_git_url({ url = url })
+      -- local _, generated_src = url2src({ url = url })
       local storePath = generated_src:match("path\": \"([^\n]+)\",")
       local src_dir = storePath
       local res = fs.find(src_dir)
