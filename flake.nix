@@ -15,12 +15,12 @@
     flake-utils.lib.eachSystem [ "x86_64-linux" ] (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-      luaInterpreters = with pkgs; [
-        lua5_1
-        lua5_2
-        lua5_3
-        lua5_4
-      ];
+        luaInterpreters = with pkgs; [
+          lua5_1
+          lua5_2
+          lua5_3
+          lua5_4
+        ];
 
         mkPackage = luaInterpreter:
           luaInterpreter.pkgs.luarocks-nix.overrideAttrs (old: {
@@ -29,7 +29,7 @@
           });
 
         mkDevShell = luaInterpreter:
-          luaInterpreter.pkgs.luarocks.overrideAttrs(oa: {
+          luaInterpreter.pkgs.luarocks.overrideAttrs (oa: {
             name = "luarocks-dev";
             buildInputs = oa.buildInputs ++ [
               # TODO restore
@@ -43,12 +43,14 @@
 
         packages = {
           default = self.packages.${system}."luarocks-51";
-        } // (nixpkgs.lib.listToAttrs (builtins.map (luaInterpreter: let
-            versions = nixpkgs.lib.splitVersion luaInterpreter.luaversion;
-            pkgName = "luarocks-${builtins.elemAt versions 0}${builtins.elemAt versions 1}";
-          in
-          nixpkgs.lib.nameValuePair pkgName (mkPackage luaInterpreter)
-        )
+        } // (nixpkgs.lib.listToAttrs (builtins.map
+          (luaInterpreter:
+            let
+              versions = nixpkgs.lib.splitVersion luaInterpreter.luaversion;
+              pkgName = "luarocks-${builtins.elemAt versions 0}${builtins.elemAt versions 1}";
+            in
+            nixpkgs.lib.nameValuePair pkgName (mkPackage luaInterpreter)
+          )
           luaInterpreters));
 
         # devShells = {
