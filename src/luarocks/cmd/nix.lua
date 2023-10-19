@@ -22,6 +22,27 @@ local vers = require("luarocks.core.vers")
 
 local _
 
+
+-- Copy of util.popen_read in src/luarocks/core/util.lua
+-- but one that returns status too
+local function popen_read(cmd, spec)
+   local dir_sep = package.config:sub(1, 1)
+   local tmpfile = (dir_sep == "\\")
+                   and (os.getenv("TMP") .. "/luarocks-" .. tostring(math.floor(math.random() * 10000)))
+                   or os.tmpname()
+   local status = os.execute(cmd .. " > " .. tmpfile)
+   local fd = io.open(tmpfile, "rb")
+   if not fd then
+      os.remove(tmpfile)
+      return ""
+   end
+   local out = fd:read(spec or "*l")
+   fd:close()
+   os.remove(tmpfile)
+   return status, out or ""
+end
+
+
 -- new flags must be added to util.lua
 -- ..util.deps_mode_help()
 -- nix.help_arguments = "[--maintainers] {<rockspec>|<rock>|<name> [<version>]}"
@@ -57,6 +78,7 @@ local function convert2nixLicense(license)
    return util.LQ(license)
 end
 
+---@param url string The url to get checksum for
 local function checksum_unpack(url)
    local r = io.popen("nix-prefetch-url --unpack "..url)
    local checksum = r:read()
@@ -125,7 +147,7 @@ end
 -- Generate nix code using fetchurl
 -- Detects if the server is in the list of possible mirrors
 -- in which case it uses the special nixpkgs uris mirror://luarocks
--- @return (fetcher, src) a tuple
+-- @return (fetcher, src) a tuple of (fetcher attribute: string, generated nix 'src': string),
 local function gen_src_from_basic_url(url)
    assert(type(url) == "string")
 
@@ -159,17 +181,23 @@ end
 
 -- Generate nix code to fetch from a git repository
 -- TODO we could check a specific branch with --rev
-local function gen_src_from_git_url(url, ref)
+local function gen_src_from_git_url(src)
 
    -- deal with  git://github.com/antirez/lua-cmsgpack.git for instance
-   local cmd = "nix-prefetch-git --fetch-submodules --quiet "..url
+   local cmd = "nix-prefetch-git --fetch-submodules --quiet "..src.url
+   local ref = src.ref or src.tag
    if ref then
       cmd = cmd.." --rev "..ref
    end
 
+   if src.branch then
+      cmd = cmd.." --branch-name '"..src.branch.."'"
+   end
+
    debug(cmd)
-   local generatedSrc = util.popen_read(cmd, "*a")
-   if generatedSrc and generatedSrc == "" then
+   local status, generatedSrc = popen_read(cmd, "*a")
+
+   if status ~= true or (generatedSrc and generatedSrc == "") then
       util.printerr("Call to "..cmd.." failed")
    end
 
@@ -193,7 +221,8 @@ local function url2src(src)
 
    if protocol == "git" or protocol == "git+https" then
       local normalized_url = "https://"..pathname
-      local nix_json = gen_src_from_git_url(normalized_url, src.ref or src.branch)
+      src.url = normalized_url
+      local nix_json = gen_src_from_git_url(src)
       if nix_json == "" then
          return nil, nil
       end
@@ -472,7 +501,8 @@ function nix.command(args)
 
       debug("is it an url ?", url)
       local rockspec_filename = nil
-      local generated_src = gen_src_from_git_url(url)
+      local generated_src = gen_src_from_git_url({ url = url })
+      -- local _, generated_src = url2src({ url = url })
       local storePath = generated_src:match("path\": \"([^\n]+)\",")
       local src_dir = storePath
       local res = fs.find(src_dir)
