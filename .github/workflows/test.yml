@@ -57,15 +57,6 @@ jobs:
         busted -o htest --exclude-tags=ssh,gpg,git,unit --verbose -Xhelper "lua_dir=$(luarocks config variables.LUA_DIR),ci"
         busted -o htest --exclude-tags=ssh,gpg,git,unit --verbose -Xhelper "lua_dir=$(luarocks config variables.LUA_DIR),ci,env=full"
 
-    - name: Coverage
-      run: |
-        eval $(luarocks path)
-        luacov -c testrun/luacov.config
-        curl -Os https://uploader.codecov.io/latest/$([ `uname -s` = "Linux" ] && echo "linux" || echo "macos")/codecov
-        chmod +x codecov
-        ( cd testrun/ && ../codecov )
-        grep "Summary" -B1 -A1000 testrun/luacov.report.out
-
   ##############################################################################
   SmokeTest:
     runs-on: "ubuntu-latest"
