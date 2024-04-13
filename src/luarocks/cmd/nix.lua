@@ -239,8 +239,10 @@ local function url2src(src)
 end
 
 
--- @param dependencies array of dependencies
--- @return tuple (dependency list of nixified names, associated constraints, associated nix derivations)
+--- @param deps_array object[] array of dependencies
+--- @return string[] dependency list of nixified names,
+--- @return string[] list of associated constraints,
+--- @return string[] list of associated nix derivations for constraints
 local function load_dependencies(deps_array)
    local dependencies = {}
    local cons = {}
@@ -269,7 +271,7 @@ local function load_dependencies(deps_array)
                constraintInputs["luaAtLeast"] = 1
             end
             if constraint_str then
-               cons[#cons+1] = "("..constraint_str..")"
+               cons[#cons+1] = constraint_str
             end
 
          end
