@@ -275,8 +275,9 @@ local function load_dependencies(deps_array)
             end
 
          end
+      else -- we dont add lua to propagated inputs
+         dependencies[entry] = true
       end
-      dependencies[entry] = true
    end
    return dependencies, cons, constraintInputs
 end
