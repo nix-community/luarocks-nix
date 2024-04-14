@@ -239,8 +239,10 @@ local function url2src(src)
 end
 
 
--- @param dependencies array of dependencies
--- @return tuple (dependency list of nixified names, associated constraints, associated nix derivations)
+--- @param deps_array object[] array of dependencies
+--- @return string[] dependency list of nixified names,
+--- @return string[] list of associated constraints,
+--- @return string[] list of associated nix derivations for constraints
 local function load_dependencies(deps_array)
    local dependencies = {}
    local cons = {}
@@ -269,12 +271,13 @@ local function load_dependencies(deps_array)
                constraintInputs["luaAtLeast"] = 1
             end
             if constraint_str then
-               cons[#cons+1] = "("..constraint_str..")"
+               cons[#cons+1] = constraint_str
             end
 
          end
+      else -- we dont add lua to propagated inputs
+         dependencies[entry] = true
       end
-      dependencies[entry] = true
    end
    return dependencies, cons, constraintInputs
 end
@@ -294,7 +297,6 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    local lua_constraints_str = ""
    local maintainers_str = ""
    local long_desc_str = ""
-   local native_build_inputs = {}
    local call_package_inputs = { buildLuarocksPackage=1 }
 
    if manual_overrides["maintainers"] then
@@ -306,6 +308,7 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    end
 
    local dependencies, lua_constraints, constraintInputs = load_dependencies(spec.dependencies)
+   local native_deps, _, _ = load_dependencies(spec.build_dependencies)
    util.deep_merge(call_package_inputs, constraintInputs)
 
    -- TODO to map lua dependencies to nix ones,
@@ -346,14 +349,23 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    if spec.build and spec.build.type then
       local build_type = spec.build.type
       if build_type == "cmake" then
-         native_build_inputs["cmake"] = 1
+         native_deps["cmake"] = true
       end
    end
 
 
-   local propagated_build_inputs_str = ""
 
    util.deep_merge(call_package_inputs, dependencies)
+   util.deep_merge(call_package_inputs, native_deps)
+
+   local native_build_inputs_str = ""
+   native_deps = util.keys(native_deps)
+   if #native_deps > 0 then
+      table.sort(native_deps)
+      native_build_inputs_str = "  nativeBuildInputs = [ "..table.concat(native_deps, " ").." ];\n"
+   end
+
+   local propagated_build_inputs_str = ""
    dependencies = util.keys(dependencies)
    if #dependencies > 0 then
       table.sort(dependencies)
@@ -383,12 +395,6 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    if rockspec_relpath ~= nil and rockspec_relpath ~= "." and rockspec_relpath ~= "" then
       rockspec_str = [[  rockspecDir = "]]..rockspec_relpath..[[";
 ]]
-   end
-
-   local native_build_inputs_str = ""
-   if #native_build_inputs > 0 then
-      native_build_inputs_str = "  nativeBuildInputs = [ ".. table.concat(native_build_inputs, " ").." ];\n"
-      util.deep_merge(call_package_inputs, native_build_inputs)
    end
 
 
