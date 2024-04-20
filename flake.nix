@@ -34,7 +34,8 @@
             buildInputs = oa.buildInputs ++ [
               # TODO restore
               pkgs.sumneko-lua-language-server
-              pkgs.lua51Packages.luacheck
+              pkgs.luajitPackages.luacheck
+              pkgs.nurl
             ];
           });
 

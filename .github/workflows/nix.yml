@@ -19,7 +19,7 @@ jobs:
       if: always()
     - run: nix run . -- nix cqueues
       if: always()
-    - run: nix run . -- nix digestif
+    - run: nix run . -- --lua-version=5.3 nix digestif
       if: always()
     - run: nix run . -- nix https://github.com/luarocks/argparse.git
       if: always()
