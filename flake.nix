@@ -41,6 +41,7 @@
               pkgs.sumneko-lua-language-server
               pkgs.luajitPackages.luacheck
               pkgs.nurl
+              pkgs.luarocks-packages-updater
             ];
           });
 
