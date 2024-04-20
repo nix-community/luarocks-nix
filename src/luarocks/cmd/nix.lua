@@ -22,6 +22,11 @@ local vers = require("luarocks.core.vers")
 
 local _
 
+---@class (exact) RockspecSource
+---@field ref? string Name of the dependency
+---@field tag? string
+---@field url string
+---@field branch? string
 
 -- Copy of util.popen_read in src/luarocks/core/util.lua
 -- but one that returns status too
@@ -73,6 +78,8 @@ end
 
 -- attempts to convert spec.description.license
 -- to spdx id (see <nixpkgs>/lib/licenses.nix)
+--- @param license string License straight from rockspec
+--- @return string quoted license
 local function convert2nixLicense(license)
    assert (license ~= nil)
    return util.LQ(license)
@@ -181,27 +188,26 @@ end
 
 -- Generate nix code to fetch from a git repository
 -- TODO we could check a specific branch with --rev
+--- @param src RockspecSource attribute "src" of the rockspec
+--- @return string The nix code for source
 local function gen_src_from_git_url(src)
 
    -- deal with  git://github.com/antirez/lua-cmsgpack.git for instance
-   local cmd = "nix-prefetch-git --fetch-submodules --quiet "..src.url
-   local ref = src.ref or src.tag
+   -- local cmd = "nix-prefetch-git --fetch-submodules --quiet "..src.url
+   local cmd = "nurl --indent 2 --submodules=true "..src.url
+   local ref = src.ref or src.tag or src.branch
    if ref then
-      cmd = cmd.." --rev "..ref
-   end
-
-   if src.branch then
-      cmd = cmd.." --branch-name '"..src.branch.."'"
+      cmd = cmd.." "..ref
    end
 
    debug(cmd)
    local status, generatedSrc = popen_read(cmd, "*a")
 
-   if status ~= true or (generatedSrc and generatedSrc == "") then
-      util.printerr("Call to "..cmd.." failed")
+   if status ~= 0 or (generatedSrc and generatedSrc == "") then
+      util.printerr("Call to "..cmd.." failed with status", status)
    end
 
-   return generatedSrc
+   return generatedSrc or ""
 end
 
 -- converts url to nix "src"
@@ -226,8 +232,11 @@ local function url2src(src)
       if nix_json == "" then
          return nil, nil
       end
-      local nix_src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path" "sha256"]) ]]
-      return "fetchgit", nix_src
+      local nix_src = nix_json
+      -- TODO get first returned element
+      local fetcher = string.match(nix_src, "^(%w+)")
+
+      return fetcher, nix_src
    end
 
    if protocol == "file" then
@@ -342,7 +351,6 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    -- manually updated before being uploaded to luarocks.org)
    fetchDeps, src_str = url2src(spec.source)
    sources = "src = "..src_str..";\n"
-
    assert (fetchDeps ~= nil)
    call_package_inputs[fetchDeps]=2
 

@@ -23,9 +23,13 @@
         ];
 
         mkPackage = luaInterpreter:
-          luaInterpreter.pkgs.luarocks-nix.overrideAttrs (old: {
+          luaInterpreter.pkgs.luarocks-nix.overrideAttrs (oa: {
             version = "dev";
             src = self;
+            # can be removed once nixpkgs is updated
+            buildInputs = oa.buildInputs ++ [
+              pkgs.nurl
+            ];
           });
 
         mkDevShell = luaInterpreter:
@@ -50,7 +54,7 @@
               versions = nixpkgs.lib.splitVersion luaInterpreter.luaversion;
               pkgName = "luarocks-${builtins.elemAt versions 0}${builtins.elemAt versions 1}";
             in
-            nixpkgs.lib.nameValuePair pkgName (mkPackage luaInterpreter)
+              nixpkgs.lib.nameValuePair pkgName (mkPackage luaInterpreter)
           )
           luaInterpreters));
 
