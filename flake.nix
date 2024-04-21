@@ -27,10 +27,6 @@
           luaInterpreter.pkgs.luarocks-nix.overrideAttrs (oa: {
             version = "dev";
             src = self;
-            # can be removed once nixpkgs is updated
-            buildInputs = oa.buildInputs ++ [
-              pkgs.nurl
-            ];
           });
 
         mkDevShell = luaInterpreter:
