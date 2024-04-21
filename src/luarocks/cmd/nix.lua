@@ -9,19 +9,20 @@
 -- needs at least one json library, for instance luaPackages.cjson
 local nix = {}
 
-local path = require("luarocks.path")
 local util = require("luarocks.util")
 local fetch = require("luarocks.fetch")
 local cfg = require("luarocks.core.cfg")
 local queries = require("luarocks.queries")
 local dir = require("luarocks.dir")
-local fs = require("luarocks.fs")
 local search = require("luarocks.search")
-local write_rockspec = require("luarocks.cmd.write_rockspec")
-local vers = require("luarocks.core.vers")
 
 local _
 
+---@class (exact) RockspecSource
+---@field ref? string Name of the dependency
+---@field tag? string
+---@field url string
+---@field branch? string
 
 -- Copy of util.popen_read in src/luarocks/core/util.lua
 -- but one that returns status too
@@ -73,6 +74,8 @@ end
 
 -- attempts to convert spec.description.license
 -- to spdx id (see <nixpkgs>/lib/licenses.nix)
+--- @param license string License straight from rockspec
+--- @return string quoted license
 local function convert2nixLicense(license)
    assert (license ~= nil)
    return util.LQ(license)
@@ -86,7 +89,8 @@ local function checksum_unpack(url)
 end
 
 
--- @return (string, string)  returns (checksum, fetcher name)
+--- @return string|nil   Checksum or nil in case of error
+--- @return string    fetcher name or error description
 local function checksum_and_file(url)
    -- TODO download the src.rock unpack it and get the hash around it ?
 
@@ -108,7 +112,7 @@ local function checksum_and_file(url)
 
    if not fetched_path or fetched_path == "" then
       util.printerr("Failed to get path from nix-prefetch-url")
-      return nil, false
+      return nil, "Failed to get path from nix-prefetch-url"
    end
    debug("Prefetched path:", fetched_path)
 
@@ -117,7 +121,7 @@ local function checksum_and_file(url)
    local _, _, desc = string.find(file_out, "^"..util.matchquote(fetched_path)..": (.*)$")
    if not desc then
       util.printerr("Failed to run 'file' on prefetched path")
-      return nil, false
+      return nil, "Failed to run 'file' on prefetched path"
    end
 
    if string.find(desc, "^Zip archive data") then
@@ -181,27 +185,26 @@ end
 
 -- Generate nix code to fetch from a git repository
 -- TODO we could check a specific branch with --rev
+--- @param src RockspecSource attribute "src" of the rockspec
+--- @return string The nix code for source
 local function gen_src_from_git_url(src)
 
    -- deal with  git://github.com/antirez/lua-cmsgpack.git for instance
-   local cmd = "nix-prefetch-git --fetch-submodules --quiet "..src.url
-   local ref = src.ref or src.tag
+   -- local cmd = "nix-prefetch-git --fetch-submodules --quiet "..src.url
+   local cmd = "nurl --indent 2 --submodules=true "..src.url
+   local ref = src.ref or src.tag or src.branch
    if ref then
-      cmd = cmd.." --rev "..ref
-   end
-
-   if src.branch then
-      cmd = cmd.." --branch-name '"..src.branch.."'"
+      cmd = cmd.." "..ref
    end
 
    debug(cmd)
    local status, generatedSrc = popen_read(cmd, "*a")
 
    if status ~= true or (generatedSrc and generatedSrc == "") then
-      util.printerr("Call to "..cmd.." failed")
+      util.printerr("Call to "..cmd.." failed with status: "..tostring(status))
    end
 
-   return generatedSrc
+   return generatedSrc or ""
 end
 
 -- converts url to nix "src"
@@ -226,8 +229,11 @@ local function url2src(src)
       if nix_json == "" then
          return nil, nil
       end
-      local nix_src = [[fetchgit ( removeAttrs (builtins.fromJSON '']].. nix_json .. [[ '') ["date" "path" "sha256"]) ]]
-      return "fetchgit", nix_src
+      local nix_src = nix_json
+      -- TODO get first returned element
+      local fetcher = string.match(nix_src, "^(%w+)")
+
+      return fetcher, nix_src
    end
 
    if protocol == "file" then
@@ -342,7 +348,6 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    -- manually updated before being uploaded to luarocks.org)
    fetchDeps, src_str = url2src(spec.source)
    sources = "src = "..src_str..";\n"
-
    assert (fetchDeps ~= nil)
    call_package_inputs[fetchDeps]=2
 
@@ -430,6 +435,7 @@ buildLuarocksPackage {
    return header
 end
 
+--- @param name string
 -- @return (spec, url, )
 local function run_query (name, version)
 
@@ -439,7 +445,7 @@ local function run_query (name, version)
    local query = queries.new(name, nil, version, false, arch)
    local url, search_err = search.find_suitable_rock(query)
    if not url then
-       util.printerr("can't find suitable rockspec "..name)
+       util.printerr("can't find suitable rockspec for '"..name.."'")
        return nil, search_err
    end
    debug('found url '..url)
@@ -463,9 +469,6 @@ function nix.convert_pkg_name_to_nix(name)
 end
 
 
-
-function nix.spec2nix_from_repo()
-end
 
 --- Driver function for "nix" command.
 -- we need to have both the rock and the rockspec
@@ -498,83 +501,10 @@ function nix.command(args)
       end
    elseif name:match(".*%.rockspec$") then
       local rockspec_filename = name
-      spec, err = fetch.load_local_rockspec(rockspec_filename, nil)
+      spec, err = fetch.load_rockspec(rockspec_filename)
       if not spec then
          return nil, err
       end
-   elseif name:match("://") then
-      local url = write_rockspec.detect_url(name)
-
-      debug("is it an url ?", url)
-      local rockspec_filename = nil
-      local generated_src = gen_src_from_git_url({ url = url })
-      -- local _, generated_src = url2src({ url = url })
-      local storePath = generated_src:match("path\": \"([^\n]+)\",")
-      local src_dir = storePath
-      local res = fs.find(src_dir)
-      local current_candidate = nil
-      debug("Printing results")
-
-      -- -- return base_name:match("(.*)%.[^.]*.rock") .. ".rockspec"
-      for _, file in ipairs(res) do
-         -- if file:match("(.*)-([^-]+-%d+)%.(rockspec)") then
-         -- local pattern = "(.*)-([^-]+-%d+)%.(rockspec)"
-         debug("analyzing file ", file)
-         local pkg_name , pkg_version, _ = path.parse_name(file)
-         -- local basename = dir.base_name(file)
-
-         -- local pattern = "(.*)-(.*).(rockspec)"
-         -- local pkg_name, pkg_version = basename:match(pattern)
-         if pkg_name then
-            local newer
-
-            if version then
-               debug("pkg_version matches requested version ?", version)
-               if pkg_version == version then
-                  newer = true
-                  debug("MATCH !! ", version)
-                  current_candidate = pkg_version
-               end
-            elseif current_candidate then
-               newer = vers.compare_versions(pkg_version, current_candidate)
-            else
-               newer = true
-               current_candidate = pkg_version
-            end
-
-            if newer then
-               rockspec_filename = storePath.. "/" .. file
-               rockspec_relpath = dir.dir_name(file)
-               debug("rockspec file", file)
-               debug("rockspec_relpath [".. rockspec_relpath .."]")
-               debug("rockspec_filename", rockspec_filename)
-               -- todo check for version against the candidates
-            end
-         -- special case for lgi repo
-         elseif file == "rockspec.in" then
-            current_candidate = true
-            rockspec_filename = storePath.. "/" .. file
-
-         end
-      end
-
-      if not current_candidate then
-         err = "can't find a valid candidate "
-         util.printerr(err)
-         -- return nil, err
-         return
-      end
-      -- local fetch_git = require("luarocks.fetch.git")
-      debug("loading rockspec ", rockspec_filename)
-      spec, err = fetch.load_local_rockspec(rockspec_filename, nil)
-      if not spec then
-         return nil, err
-      end
-
-      -- TODO if version matches scm, overwrite the source.url
-      -- override the rockspec src
-      -- spec.source.url = name
-
    else
       -- assume it's just a name
       rockspec_name = name

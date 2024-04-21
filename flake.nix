@@ -2,8 +2,9 @@
   description = "Luarocks flake";
 
   inputs = {
-    flake-utils.url = "github:numtide/flake-utils";
     nixpkgs.url = "github:nixos/nixpkgs";
+
+    flake-utils.url = "github:numtide/flake-utils";
 
     flake-compat = {
       url = "github:edolstra/flake-compat";
@@ -23,7 +24,7 @@
         ];
 
         mkPackage = luaInterpreter:
-          luaInterpreter.pkgs.luarocks-nix.overrideAttrs (old: {
+          luaInterpreter.pkgs.luarocks-nix.overrideAttrs (oa: {
             version = "dev";
             src = self;
           });
@@ -34,9 +35,20 @@
             buildInputs = oa.buildInputs ++ [
               # TODO restore
               pkgs.sumneko-lua-language-server
-              pkgs.lua51Packages.luacheck
+              pkgs.luajitPackages.luacheck
+              pkgs.nurl
+              pkgs.luarocks-packages-updater
             ];
           });
+
+        # generates a shortname for a lua interpreter
+        interpreterShortname = luaInterpreter:
+          let
+            versions = nixpkgs.lib.splitVersion luaInterpreter.luaversion;
+            pkgName = "luarocks-${builtins.elemAt versions 0}${builtins.elemAt versions 1}";
+          in
+            pkgName;
+
 
       in
       {
@@ -46,17 +58,16 @@
         } // (nixpkgs.lib.listToAttrs (builtins.map
           (luaInterpreter:
             let
-              versions = nixpkgs.lib.splitVersion luaInterpreter.luaversion;
-              pkgName = "luarocks-${builtins.elemAt versions 0}${builtins.elemAt versions 1}";
+              pkgName = interpreterShortname luaInterpreter;
             in
-            nixpkgs.lib.nameValuePair pkgName (mkPackage luaInterpreter)
+              nixpkgs.lib.nameValuePair pkgName (mkPackage luaInterpreter)
           )
           luaInterpreters));
 
-        # devShells = {
-        #   default = self.devShells.${system}.luarocks-51;
-        #   } // (nixpkgs.lib.listToAttrs (builtins.map (luaInterpreter:
-        #     nixpkgs.lib.nameValuePair "luarocks-${luaInterpreter.version}" (mkDevShell luaInterpreter)
-        #   luaInterpreters)));
+        devShells = {
+          default = self.devShells.${system}."luarocks-51";
+          } // (nixpkgs.lib.listToAttrs (builtins.map (luaInterpreter:
+            nixpkgs.lib.nameValuePair (interpreterShortname luaInterpreter) (mkDevShell luaInterpreter))
+          luaInterpreters));
       });
 }
