@@ -89,7 +89,8 @@ local function checksum_unpack(url)
 end
 
 
--- @return (string, string)  returns (checksum, fetcher name)
+--- @return string|nil   Checksum or nil in case of error
+--- @return string    fetcher name or error description
 local function checksum_and_file(url)
    -- TODO download the src.rock unpack it and get the hash around it ?
 
@@ -111,7 +112,7 @@ local function checksum_and_file(url)
 
    if not fetched_path or fetched_path == "" then
       util.printerr("Failed to get path from nix-prefetch-url")
-      return nil, false
+      return nil, "Failed to get path from nix-prefetch-url"
    end
    debug("Prefetched path:", fetched_path)
 
@@ -120,7 +121,7 @@ local function checksum_and_file(url)
    local _, _, desc = string.find(file_out, "^"..util.matchquote(fetched_path)..": (.*)$")
    if not desc then
       util.printerr("Failed to run 'file' on prefetched path")
-      return nil, false
+      return nil, "Failed to run 'file' on prefetched path"
    end
 
    if string.find(desc, "^Zip archive data") then
@@ -199,8 +200,8 @@ local function gen_src_from_git_url(src)
    debug(cmd)
    local status, generatedSrc = popen_read(cmd, "*a")
 
-   if status ~= 0 or (generatedSrc and generatedSrc == "") then
-      util.printerr("Call to "..cmd.." failed with status", status)
+   if status ~= true or (generatedSrc and generatedSrc == "") then
+      util.printerr("Call to "..cmd.." failed with status: "..tostring(status))
    end
 
    return generatedSrc or ""
@@ -434,6 +435,7 @@ buildLuarocksPackage {
    return header
 end
 
+--- @param name string
 -- @return (spec, url, )
 local function run_query (name, version)
 
@@ -443,7 +445,7 @@ local function run_query (name, version)
    local query = queries.new(name, nil, version, false, arch)
    local url, search_err = search.find_suitable_rock(query)
    if not url then
-       util.printerr("can't find suitable rockspec "..name)
+       util.printerr("can't find suitable rockspec for '"..name.."'")
        return nil, search_err
    end
    debug('found url '..url)
@@ -467,9 +469,6 @@ function nix.convert_pkg_name_to_nix(name)
 end
 
 
-
-function nix.spec2nix_from_repo()
-end
 
 --- Driver function for "nix" command.
 -- we need to have both the rock and the rockspec
