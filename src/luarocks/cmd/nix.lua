@@ -191,7 +191,7 @@ local function gen_src_from_git_url(src)
 
    -- deal with  git://github.com/antirez/lua-cmsgpack.git for instance
    -- local cmd = "nix-prefetch-git --fetch-submodules --quiet "..src.url
-   local cmd = "nurl --indent 2 --submodules=true "..src.url
+   local cmd = "nurl --indent 2 "..src.url
    local ref = src.ref or src.tag or src.branch
    if ref then
       cmd = cmd.." "..ref
