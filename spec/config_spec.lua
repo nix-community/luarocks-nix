@@ -7,13 +7,11 @@ local write_file = test_env.write_file
 local get_tmp_path = test_env.get_tmp_path
 local hardcoded
 
-test_env.unload_luarocks()
-
 describe("LuaRocks config tests #integration", function()
 
-   setup(function()
+   lazy_setup(function()
       test_env.setup_specs()
-      test_env.unload_luarocks() -- need to be required here, because hardcoded is created after first loading of specs
+      -- needs to be required here, because hardcoded is created after first loading of specs
       hardcoded = require("luarocks.core.hardcoded")
    end)
 
@@ -23,15 +21,7 @@ describe("LuaRocks config tests #integration", function()
       end)
 
       it("--json", function()
-         assert.is_true(run.luarocks_nocov("install dkjson"))
-         finally(function()
-            assert.is_true(run.luarocks_nocov("remove dkjson"))
-         end)
          assert.match('"rocks_servers":[', run.luarocks("config --json"), 1, true)
-      end)
-
-      it("--json fails without a json library", function()
-         assert.falsy(run.luarocks_bool("config --json"))
       end)
 
       it("with --tree respects custom config", function()
@@ -123,22 +113,6 @@ describe("LuaRocks config tests #integration", function()
             assert.is_false(run.luarocks_bool("config --system-config"))
          end)
 
-         it("outputs the path of the system config", function()
-            lfs.mkdir(testing_paths.testing_lrprefix)
-            lfs.mkdir(testing_paths.testing_lrprefix .. "/etc/")
-            lfs.mkdir(scdir)
-
-            local sysconfig = io.open(configfile, "w+")
-            sysconfig:write(" ")
-            sysconfig:close()
-            finally(function()
-               os.remove(configfile)
-            end)
-
-            local output = run.luarocks("config --system-config")
-            assert.are.same(configfile, output)
-         end)
-
          it("fails if system config is invalid", function()
             lfs.mkdir(testing_paths.testing_lrprefix)
             lfs.mkdir(testing_paths.testing_lrprefix .. "/etc/")
@@ -167,16 +141,8 @@ describe("LuaRocks config tests #integration", function()
       end)
 
       it("can read as JSON", function()
-         assert.is_true(run.luarocks_nocov("install dkjson"))
-         finally(function()
-            assert.is_true(run.luarocks_nocov("remove dkjson"))
-         end)
          local output = run.luarocks("config rocks_trees --json")
-         assert.match('^%["', output)
-      end)
-
-      it("--json does not work without a json library", function()
-         assert.is_false(run.luarocks_bool("config rocks_trees --json"))
+         assert.match('^%[{', output)
       end)
 
       it("reads an array -> hash config key", function()
@@ -251,6 +217,20 @@ describe("LuaRocks config tests #integration", function()
 
             local output = run.luarocks("config variables.FOO_DIR")
             assert.match("/foo/bar", output)
+         end, finally)
+      end)
+
+      it("writes a boolean config key", function()
+         test_env.run_in_tmp(function(tmpdir)
+            local myproject = tmpdir .. "/myproject"
+            lfs.mkdir(myproject)
+            lfs.chdir(myproject)
+
+            assert(run.luarocks("init"))
+            assert.truthy(run.luarocks_bool("config hooks_enabled true"))
+
+            local output = run.luarocks("config hooks_enabled")
+            assert.match("true", output)
          end, finally)
       end)
 

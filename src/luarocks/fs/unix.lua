@@ -48,11 +48,11 @@ function unix.absolute_name(pathname, relative_to)
       pathname = unquoted
    end
 
-   relative_to = (relative_to or fs.current_dir()):gsub("/*$", "")
+   relative_to = relative_to or fs.current_dir()
    if pathname:sub(1,1) == "/" then
-      return pathname
+      return dir.normalize(pathname)
    else
-      return relative_to .. "/" .. pathname
+      return dir.path(relative_to, pathname)
    end
 end
 
@@ -109,7 +109,7 @@ function unix.wrap_script(script, target, deps_mode, name, version, ...)
    end
 
    local argv = {
-      fs.Q(dir.path(cfg.variables["LUA_BINDIR"], cfg.lua_interpreter)),
+      fs.Q(cfg.variables["LUA"]),
       "-e",
       fs.Q(table.concat(luainit, ";")),
       script and fs.Q(script) or [[$([ "$*" ] || echo -i)]],
@@ -228,6 +228,16 @@ function unix.system_cache_dir()
 end
 
 function unix.search_in_path(program)
+   if program:match("/") then
+      local fd = io.open(dir.path(program), "r")
+      if fd then
+         fd:close()
+         return true, program
+      end
+
+      return false
+   end
+
    for d in (os.getenv("PATH") or ""):gmatch("([^:]+)") do
       local fd = io.open(dir.path(d, program), "r")
       if fd then

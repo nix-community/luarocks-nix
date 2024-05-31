@@ -81,7 +81,10 @@ end
 -- plus an error message.
 function tools.copy_contents(src, dest)
    assert(src and dest)
-   if fs.execute_quiet(vars.CP.." -pPR "..fs.Q(src).."/* "..fs.Q(dest)) then
+   if not fs.is_dir(src) then
+      return false, src .. " is not a directory"
+   end
+   if fs.make_dir(dest) and fs.execute_quiet(vars.CP.." -pPR "..fs.Q(src).."/* "..fs.Q(dest)) then
       return true
    else
       return false, "Failed copying "..src.." to "..dest
@@ -313,6 +316,45 @@ end
 
 function tools.is_superuser()
    return fs.current_user() == "root"
+end
+
+function tools.lock_access(dirname, force)
+   local ok, err = fs.make_dir(dirname)
+   if not ok then
+      return nil, err
+   end
+
+   local tempfile = dir.path(dirname, ".lock.tmp." .. tostring(math.random(100000000)))
+
+   local fd, fderr = io.open(tempfile, "w")
+   if not fd then
+      return nil, "failed opening temp file " .. tempfile .. " for locking: " .. fderr
+   end
+
+   local ok, werr = fd:write("lock file for " .. dirname)
+   if not ok then
+      return nil, "failed writing temp file " .. tempfile .. " for locking: " .. werr
+   end
+
+   fd:close()
+
+   local lockfile = dir.path(dirname, "lockfile.lfs")
+
+   local force_flag = force and " -f" or ""
+
+   if fs.execute(vars.LN .. force_flag, tempfile, lockfile) then
+      return {
+         tempfile = tempfile,
+         lockfile = lockfile,
+      }
+   else
+      return nil, "File exists" -- same message as luafilesystem
+   end
+end
+
+function tools.unlock_access(lock)
+   os.remove(lock.lockfile)
+   os.remove(lock.tempfile)
 end
 
 return tools

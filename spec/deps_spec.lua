@@ -3,13 +3,9 @@ local lfs = require("lfs")
 local run = test_env.run
 local testing_paths = test_env.testing_paths
 
-test_env.unload_luarocks()
-
 local extra_rocks = {
    "/lxsh-${LXSH}.src.rock",
-   "/lxsh-${LXSH}.rockspec",
    "/luasocket-${LUASOCKET}.src.rock",
-   "/luasocket-${LUASOCKET}.rockspec",
    "/lpeg-${LPEG}.src.rock",
 }
 

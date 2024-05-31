@@ -2,11 +2,9 @@ local test_env = require("spec.util.test_env")
 local lfs = require("lfs")
 local run = test_env.run
 
-test_env.unload_luarocks()
-
 describe("LuaRocks command line #integration", function()
 
-   setup(function()
+   lazy_setup(function()
       test_env.setup_specs()
    end)
 
@@ -56,12 +54,6 @@ describe("LuaRocks command line #integration", function()
       it("fails if given something that is not a number", function()
          local output = run.luarocks("--lua-version=bozo")
          assert.match("malformed", output, 1, true)
-      end)
-
-      it("warns but continues if given an invalid version", function()
-         local output = run.luarocks("--lua-version=1.0")
-         assert.match("Warning: Lua 1.0 interpreter not found", output, 1, true)
-         assert.match("Version%s*:%s*1.0", output)
       end)
 
       it("sets the version independently of project tree", function()

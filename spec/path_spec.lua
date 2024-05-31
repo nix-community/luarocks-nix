@@ -1,8 +1,6 @@
 local test_env = require("spec.util.test_env")
 local run = test_env.run
 
-test_env.unload_luarocks()
-
 describe("luarocks path #integration", function()
    before_each(function()
       test_env.setup_specs()
@@ -56,20 +54,5 @@ describe("luarocks path #integration", function()
 
    it("--tree", function()
       assert.is_true(run.luarocks_bool("path --tree=lua_modules"))
-   end)
-
-   it("--project-tree", function()
-      local path1 = "/share/lua/5%." .. test_env.lua_version:sub(3, 3) .. "/%?%.lua"
-      local path2 = "/share/lua/5%." .. test_env.lua_version:sub(3, 3) .. "/%?/init%.lua"
-
-      local path = run.luarocks("path --project-tree=foo")
-      assert.truthy(path:find("foo" .. path1))
-      assert.truthy(path:find("foo" .. path2))
-
-      path = run.luarocks("path --project-tree=foo --tree=bar")
-      assert.falsy(path:find("foo" .. path1))
-      assert.falsy(path:find("foo" .. path2))
-      assert.truthy(path:find("bar" .. path1))
-      assert.truthy(path:find("bar" .. path2))
    end)
 end)

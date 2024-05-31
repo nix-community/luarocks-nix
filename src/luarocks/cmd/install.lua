@@ -13,7 +13,6 @@ local remove = require("luarocks.remove")
 local search = require("luarocks.search")
 local queries = require("luarocks.queries")
 local cfg = require("luarocks.core.cfg")
-local cmd = require("luarocks.cmd")
 
 function install.add_to_parser(parser)
    local cmd = parser:command("install", "Install a rock.", util.see_also())  -- luacheck: ignore 431
@@ -28,7 +27,8 @@ function install.add_to_parser(parser)
       "rock after building a new one. This behavior can be made permanent by "..
       "setting keep_other_versions=true in the configuration file.")
    cmd:flag("--force", "If --keep is not specified, force removal of "..
-      "previously installed versions if it would break dependencies.")
+      "previously installed versions if it would break dependencies. "..
+      "If rock is already installed, reinstall it anyway.")
    cmd:flag("--force-fast", "Like --force, but performs a forced removal "..
       "without reporting dependency issues.")
    cmd:flag("--only-deps --deps-only", "Install only the dependencies of the rock.")
@@ -84,6 +84,11 @@ function install.install_binary_rock(rock_file, opts)
       return nil, "Incompatible architecture "..arch, "arch"
    end
    if repos.is_installed(name, version) then
+      if (not opts.force) and (not opts.force_fast) then
+         util.printout(name .. " " .. version .. " is already installed in " .. path.root_dir(cfg.root_dir))
+         util.printout("Use --force to reinstall.")
+         return name, version
+      end
       repos.delete_version(name, version, opts.deps_mode)
    end
 
@@ -220,9 +225,6 @@ end
 -- @return boolean or (nil, string, exitcode): True if installation was
 -- successful, nil and an error message otherwise. exitcode is optionally returned.
 function install.command(args)
-   local ok, err = fs.check_command_permissions(args)
-   if not ok then return nil, err, cmd.errorcodes.PERMISSIONDENIED end
-
    if args.rock:match("%.rockspec$") or args.rock:match("%.src%.rock$") then
       local build = require("luarocks.cmd.build")
       return build.command(args)
@@ -253,6 +255,13 @@ function install.command(args)
       args.rock = url
       return install.command(args)
    end
+end
+
+install.needs_lock = function(args)
+   if args.pack_binary_rock then
+      return false
+   end
+   return true
 end
 
 return install

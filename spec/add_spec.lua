@@ -2,11 +2,8 @@ local test_env = require("spec.util.test_env")
 local run = test_env.run
 local testing_paths = test_env.testing_paths
 
-test_env.unload_luarocks()
-
 local extra_rocks = {
    "/luasocket-${LUASOCKET}.src.rock",
-   "/luasocket-${LUASOCKET}.rockspec"
 }
 
 describe("LuaRocks add tests #integration", function()

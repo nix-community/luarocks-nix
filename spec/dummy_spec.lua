@@ -3,8 +3,7 @@
 local test_env = require("spec.util.test_env")
 local testing_paths = test_env.testing_paths
 
-test_env.unload_luarocks()
-
+test_env.setup_specs()
 local runner = require("luacov.runner")
 runner.init(testing_paths.testrun_dir .. "/luacov.config")
 
@@ -22,4 +21,4 @@ require("luarocks.fetch.hg")
 require("luarocks.fetch.sscm")
 require("luarocks.fetch.svn")
 
-runner.shutdown()
+runner.save_stats()

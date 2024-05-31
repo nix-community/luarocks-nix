@@ -4,8 +4,7 @@ local run = test_env.run
 local testing_paths = test_env.testing_paths
 local env_variables = test_env.env_variables
 local V = test_env.V
-
-test_env.unload_luarocks()
+local P = test_env.P
 
 local extra_rocks = {
    "/abelhas-1.1-1.src.rock",
@@ -86,7 +85,7 @@ describe("luarocks remove #integration", function()
       end)
 
       it("restores old versions", function()
-         local libdir = testing_paths.testing_sys_tree .. "/lib/lua/"..env_variables.LUA_VERSION
+         local libdir = P(testing_paths.testing_sys_tree .. "/lib/lua/"..env_variables.LUA_VERSION)
 
          assert.is_true(run.luarocks_bool("install luafilesystem ${LUAFILESYSTEM_OLD_V}"))
          assert.is.truthy(lfs.attributes(libdir.."/lfs."..test_env.lib_extension))
