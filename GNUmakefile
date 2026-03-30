@@ -16,7 +16,7 @@ buildbinarydir = ./build-binary
 
 LUAROCKS_FILES = $(shell find src/luarocks/ -type f -name '*.lua')
 
-LUA_ENV_VARS = LUA_PATH LUA_PATH_5_2 LUA_PATH_5_3 LUA_PATH_5_4 LUA_CPATH LUA_CPATH_5_2 LUA_CPATH_5_3 LUA_CPATH_5_4
+LUA_ENV_VARS = LUA_PATH LUA_PATH_5_2 LUA_PATH_5_3 LUA_PATH_5_4 LUA_PATH_5_5 LUA_CPATH LUA_CPATH_5_2 LUA_CPATH_5_3 LUA_CPATH_5_4 LUA_CPATH_5_5
 
 all: build
 
@@ -119,7 +119,7 @@ install: all install-config
 	do \
 	   $(INSTALL_DATA) "$$f" '$(DESTDIR)$(luadir)'/`echo $$f | sed 's,^src/,,'`; \
 	done
-ifeq (,$(findstring $(LUA_VERSION),"5.3" "5.4"))
+ifeq (,$(findstring $(LUA_VERSION),"5.3" "5.4" "5.5"))
 	find src/compat53/ -type d | while read f; \
 	do \
 	   mkdir -p '$(DESTDIR)$(luadir)'/`echo $$f | sed 's,^src/,,'`; \

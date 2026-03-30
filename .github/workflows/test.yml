@@ -2,17 +2,18 @@ name: test
 
 on:
   push:
-    branches: main
+    branches:
+      - main
     paths-ignore:
       - "docs"
       - "**/*.md"
   pull_request:
-    branches: '*'
+    branches:
+      - '*'
     paths-ignore:
       - "docs"
       - "**/*.md"
   workflow_dispatch:
-    branches: '*'
 
 jobs:
   ##############################################################################
@@ -47,7 +48,7 @@ jobs:
 
     - uses: luarocks/gh-actions-luarocks@master
       with:
-        luaRocksVersion: "@418d2ab34891b130cc317df32f65f978640febcf"
+        luaRocksVersion: "3.12.2"
 
     - name: 'Setup macOS deps'
       if: ${{ contains(matrix.os, 'macos') }}
@@ -303,7 +304,7 @@ jobs:
       # The following env variables
       # only applies to Visual Studio
       LUAROCKS_DEPS_DIR: c:\external
-      LUAROCKS_DEPS_OPENSSL_VER: "3.4.1"
+      LUAROCKS_DEPS_OPENSSL_VER: "3.6.0"
       LUAROCKS_DEPS_ZLIB_VER: "1.3.1"
       # The following env variable
       # applies to both Visual Studio and MinGW-w64
@@ -486,7 +487,7 @@ jobs:
           }
 
           if ($installerUrl -eq $null) {
-            throw "Installer not found for version $version";
+            throw "Installer not found for version ${version}. Please, update OpenSSL to the latest version found at ${jsonUrl}";
           }
 
           # Download the installer
@@ -600,7 +601,7 @@ jobs:
           hererocks ^
             "%CURRENT_LUA_DIRNAME%" ^
             "--${{ matrix.LUAT }}" "${{ matrix.LUAV }}" ^
-            --luarocks "@418d2ab34891b130cc317df32f65f978640febcf" ^
+            --luarocks "3.12.2" ^
             "--target=${{ matrix.COMPILER }}"
 
           IF %ERRORLEVEL% NEQ 0 (
