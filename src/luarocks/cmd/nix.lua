@@ -79,6 +79,10 @@ local function debug(...)
    end
 end
 
+local function trim(msg)
+   return msg:match("^%s*(.*)%s*$")
+end
+
 -- attempts to convert spec.description.license
 -- to spdx id (see <nixpkgs>/lib/licenses.nix)
 --- @param license string License straight from rockspec
@@ -322,8 +326,10 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
       maintainers_str = "    maintainers = with lib.maintainers; [ "..manual_overrides["maintainers"].." ];\n"
    end
 
-   if spec.description.detailed then
-      long_desc_str = "    longDescription = ''"..spec.description.detailed.."'';\n"
+   -- several rockspecs have an empty detailed description
+   if spec.description.detailed and spec.description.detailed ~= "" then
+      -- we must convert tabs else nixpkgs' treefmt complains
+      long_desc_str = "    longDescription = ''"..trim(spec.description.detailed).."'';\n"
    end
 
    local dependencies, lua_constraints, constraintInputs = load_dependencies(spec.dependencies.queries)
