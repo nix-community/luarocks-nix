@@ -36,14 +36,14 @@ local function popen_read(cmd, spec)
    local fd = io.open(tmpfile, "rb")
    if not fd then
       os.remove(tmpfile)
-      return ""
+      return nil, "Could not read command output"
    end
    local out = fd:read(spec or "*l")
    fd:close()
    os.remove(tmpfile)
-   if #res == 1 then
+   if type(res[1]) == "number" then
       -- lua5.1 's os.execute just returns status
-      return res, out or ""
+      return res[1], out or ""
    else
       -- assume lua >= 5.2 => returns (success, exit_type, exit_code)
       return res[3], out or ""
@@ -94,8 +94,10 @@ end
 
 ---@param url string The url to get checksum for
 local function checksum_unpack(url)
-   local r = io.popen("nix-prefetch-url --unpack "..url)
-   local checksum = r:read()
+   local status, checksum = popen_read("nix-prefetch-url --unpack "..url)
+   if status ~= 0 or not checksum or checksum == "" then
+      return nil, "Failed to unpack source with nix-prefetch-url"
+   end
    return checksum
 end
 
@@ -108,30 +110,28 @@ local function checksum_and_file(url)
    -- redirect stderr to a tempfile
    -- Note: This logic is posix-only
    local tmpfile = os.tmpname()
-   local r = io.popen("nix-prefetch-url "..url.." 2>"..tmpfile)
-
-   -- checksum is on stdout
-   local checksum = r:read()
-   -- path is on stderr
-   local fetched_path = ""
+   -- Wait for the command before reading its stderr.
+   local status, checksum = popen_read("nix-prefetch-url "..url.." 2>"..tmpfile)
+   local fetched_path
    local fd = io.open(tmpfile, "rb")
    if fd then
       local stderr = fd:read("*a")
-      _, _, fetched_path = string.find(stderr, "^path is '(.+)'\n$")
+      fd:close()
+      fetched_path = stderr:match("^path is '(.+)'\n$")
    end
    os.remove(tmpfile)
 
+   if status ~= 0 or not checksum or checksum == "" then
+      return nil, "Failed to fetch source with nix-prefetch-url"
+   end
    if not fetched_path or fetched_path == "" then
-      util.printerr("Failed to get path from nix-prefetch-url")
       return nil, "Failed to get path from nix-prefetch-url"
    end
    debug("Prefetched path:", fetched_path)
 
-   local f = io.popen("file "..fetched_path)
-   local file_out = f:read()
-   local _, _, desc = string.find(file_out, "^"..util.matchquote(fetched_path)..": (.*)$")
-   if not desc then
-      util.printerr("Failed to run 'file' on prefetched path")
+   local file_status, file_out = popen_read("file "..fetched_path)
+   local desc = file_out and file_out:match("^"..util.matchquote(fetched_path)..": (.*)$")
+   if file_status ~= 0 or not desc then
       return nil, "Failed to run 'file' on prefetched path"
    end
 
@@ -167,8 +167,15 @@ local function gen_src_from_basic_url(url)
    assert(type(url) == "string")
 
    local checksum, fetcher = checksum_and_file(url)
+   if not checksum then
+      return nil, fetcher
+   end
    if fetcher == "fetchzip" then
-      checksum = checksum_unpack(url)
+      local err
+      checksum, err = checksum_unpack(url)
+      if not checksum then
+         return nil, err
+      end
    end
 
    local final_url = url
@@ -213,11 +220,14 @@ local function gen_src_from_git_url(src)
    debug(cmd)
    local status, generatedSrc = popen_read(cmd, "*a")
 
-   if status ~= 0 or (generatedSrc and generatedSrc == "") then
-      util.printerr("Call to "..cmd.." failed with status: "..tostring(status))
+   if status ~= 0 then
+      return nil, "Call to "..cmd.." failed with status: "..tostring(status)
+   end
+   if not generatedSrc or not generatedSrc:match("^%s*[%w_]+%s*{.*}%s*$") then
+      return nil, "Call to "..cmd.." returned an empty or incomplete source"
    end
 
-   return generatedSrc or ""
+   return generatedSrc
 end
 
 -- converts url to nix "src"
@@ -238,13 +248,13 @@ local function url2src(src)
    if protocol == "git" or protocol == "git+https" then
       local normalized_url = "https://"..pathname
       src.url = normalized_url
-      local nix_json = gen_src_from_git_url(src)
-      if nix_json == "" then
-         return nil, nil
+      local nix_json, err = gen_src_from_git_url(src)
+      if not nix_json then
+         return nil, err
       end
       local nix_src = nix_json
       -- TODO get first returned element
-      local fetcher = string.match(nix_src, "^(%w+)")
+      local fetcher = string.match(nix_src, "^%s*([%w_]+)")
 
       return fetcher, nix_src
    end
@@ -355,10 +365,11 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    if rockspec_url then
      -- sources = "src = "..gen_src_from_basic_url(rock_url)..";"
      fetchDeps, src_str = url2src({ url = rockspec_url})
-     rockspec_str = [[  knownRockspec = (]]..src_str..[[).outPath;]]
-     if fetchDeps ~= nil then
-      call_package_inputs[fetchDeps]=2
+     if not fetchDeps then
+        return nil, src_str
      end
+     rockspec_str = [[  knownRockspec = (]]..src_str..[[).outPath;]]
+     call_package_inputs[fetchDeps]=2
 
    end
 
@@ -366,8 +377,10 @@ local function convert_spec2nix(spec, rockspec_relpath, rockspec_url, manual_ove
    -- valid rockspecs in the repo for a specific revision (the rockspec is
    -- manually updated before being uploaded to luarocks.org)
    fetchDeps, src_str = url2src(spec.source)
+   if not fetchDeps then
+      return nil, src_str
+   end
    sources = "src = "..src_str..";\n"
-   assert (fetchDeps ~= nil)
    call_package_inputs[fetchDeps]=2
 
    if spec.build and spec.build.type then
